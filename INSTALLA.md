@@ -9,13 +9,13 @@ Se lo fa un agente per te, gli basta questo foglio e [`AGENTS.md`](AGENTS.md).
 xcode-select --install
 ```
 
-(Se dice che sono già installati, va bene.) Serve anche l'app desktop di Claude.
-Facoltativi: `brew install ffmpeg` (per la musica), Python 3 (per l'hook).
+(Se dice che sono già installati, va bene.) Facoltativi: l'app desktop di Claude
+(per il modo di base), `brew install ffmpeg` (per la musica), Python 3 (per l'hook).
 
 ## 2. Scaricarlo
 
 ```bash
-git clone <indirizzo di questo repository> ~/pomodoro
+git clone https://github.com/eneaqupovisione/pomodoro-biomi.git ~/pomodoro
 ```
 
 ```bash
@@ -67,9 +67,14 @@ Toglierlo dall'accesso: `./installa.sh --togli`.
 - `bioma`: il nome di un file di `scene/` senza `.html`.
 - `oggi`: minuti diversi solo per una data,
   `{"data": "2026-11-05", "lavoro_minuti": 30, "pausa_minuti": 5}`.
-- `app` (facoltativa): l'identificativo dell'app da contare e coprire. Di base
-  `com.anthropic.claudefordesktop`. Per trovare quello di un'altra app:
-  `osascript -e 'id of app "Nome"'`.
+- `app`: cosa conta e cosa copre la pausa (si sceglie anche dalla finestra, «Cosa
+  conta, cosa copre»):
+  - senza `app`, o `"com.anthropic.claudefordesktop"`: solo Claude, e la pausa copre
+    solo le sue finestre;
+  - `"tutto"`: qualunque app conta, e la pausa copre tutti gli schermi;
+  - un'altra app, o una lista (`["com.apple.Preview", "com.apple.Safari"]`): contano
+    quelle, e la pausa copre le loro finestre. L'identificativo di un'app:
+    `osascript -e 'id of app "Anteprima"'`.
 - `spento_fino`: lo scrive «Spegni»; toglierlo riaccende.
 
 L'app le rilegge ogni secondo: non serve ricostruire.
@@ -104,10 +109,53 @@ col percorso vero della cartella:
 Se `settings.json` ha già degli hook, si aggiunge la voce accanto alle altre. Se
 qualcosa si rompe, l'hook lascia passare il messaggio.
 
-## 7. Provarlo
+## 7. Farlo diventare un'app come le altre
 
-Una pausa di prova di 20 secondi, sopra Claude, che non tocca il conto né segna
-uscite:
+Dopo `./installa.sh` il Pomodoro c'è sempre: parte all'accesso e vive nella barra in
+alto. Per aprirlo come un'app qualunque:
+
+- **Sulla scrivania o in Applicazioni**: trascina `app/Pomodoro.app` tenendo
+  premuti ⌘ e ⌥: si crea un **alias**. Non copiare né spostare l'app: trova la sua
+  cartella da dove sta (i biomi, la musica, le impostazioni sono accanto a lei).
+  Un alias in `~/Applications` lo mette accanto alle altre app.
+- **Nel Dock**: trascina `app/Pomodoro.app` nel Dock.
+- Il doppio clic apre la finestra. Se il Pomodoro gira già, chiede a quello acceso
+  di aprirla, e se ne va: ce n'è sempre uno solo.
+
+**I permessi.** Il Pomodoro non ne chiede: niente Accessibilità, niente
+registrazione dello schermo. Legge dove stanno le finestre (non cosa c'è dentro),
+da quanto non tocchi tastiera e mouse, e quale app è davanti, e per tutto questo
+macOS non chiede niente. Le cose che può mostrarti macOS:
+
+- dopo `./installa.sh`, la notifica «Elemento in background aggiunto»: è il
+  LaunchAgent. Lo trovi in Impostazioni di Sistema → Generali → Elementi login ed
+  estensioni, sotto «Consenti in background»; lascialo acceso, o il Pomodoro non
+  parte all'accesso;
+- niente avvisi di Gatekeeper: l'app la costruisci tu, sul tuo Mac, quindi macOS
+  non la tratta come un'app scaricata. Per questo il repository non contiene
+  un'app già costruita, e non conviene usarne una costruita da altri.
+
+**Se aggiungi tu qualcosa che chiede un permesso** (per esempio leggere quale chat
+è aperta in un'app, che chiede l'Accessibilità): con la firma ad hoc ogni
+ricostruzione è un'app nuova per macOS, e il permesso salta a ogni
+`./costruisci.command`. Per tenerlo, firma sempre con lo stesso certificato:
+
+1. Accesso Portachiavi → menu Accesso Portachiavi → Assistente Certificato → Crea
+   un certificato…; un nome (per esempio «Pomodoro locale»), identità «Radice
+   autofirmata», tipo di certificato «Firma del codice».
+2. Costruisci con quel nome:
+
+   ```bash
+   POMODORO_FIRMA="Pomodoro locale" ./installa.sh
+   ```
+
+3. Dai il permesso una volta, in Impostazioni di Sistema → Privacy e sicurezza.
+   Resta anche dopo le ricostruzioni.
+
+## 8. Provarlo
+
+Una pausa di prova di 20 secondi, come quella vera (sopra Claude, o su tutto lo
+schermo col modo «tutto il Mac»), che non tocca il conto né segna uscite:
 
 ```bash
 app/Pomodoro.app/Contents/MacOS/Pomodoro --prova 20 --bioma mare
@@ -120,6 +168,6 @@ chiudono prima.
 
 - **Il 🍅 non c'è**: `launchctl print gui/$(id -u)/local.pomodoro.biomi` e
   `dati/errori.log`.
-- **Il conto non sale**: conta solo con l'app di Claude davanti e le mani sul Mac.
-  Se usi un'altra app, mettila in `app`.
+- **Il conto non sale**: conta solo con l'app che conta davanti (di base Claude) e
+  le mani sul Mac. Scegli «tutto il Mac» nella finestra, o metti le tue app in `app`.
 - **La pausa non copre**: le finestre più piccole di 300×200 punti non si coprono.

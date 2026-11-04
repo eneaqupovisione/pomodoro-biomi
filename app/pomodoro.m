@@ -1,6 +1,8 @@
-// Pomodoro: dopo N minuti di Claude in primo piano, una pausa di K minuti in cui
-// la finestra di Claude è coperta da un bioma in pixel art (scene/*.html). Il resto
-// del Mac resta libero, e Claude continua a lavorare sotto. Dieci tocchi di fila
+// Pomodoro: dopo N minuti di lavoro, una pausa di K minuti coperta da un bioma in pixel art
+// (scene/*.html). Di base conta Claude in primo piano e copre solo le sue finestre: il resto
+// del Mac resta libero, e Claude continua a lavorare sotto. Con "app": "tutto" in
+// impostazioni.json conta qualunque app e copre ogni schermo (per lo studio, per il
+// computer in generale); con un'altra app, o una lista, conta e copre quelle. Dieci tocchi di fila
 // sulla pausa la tolgono prima, e l'uscita resta segnata. Si costruisce con
 // ../costruisci.command.
 //
@@ -18,17 +20,18 @@
 #import <QuartzCore/QuartzCore.h>
 
 static NSString *const CLAUDE = @"com.anthropic.claudefordesktop";   // l'app che conta e che si copre, se impostazioni.json non ne dice un'altra
+static NSString *const TUTTO = @"tutto";                              // "app": "tutto": tutto il Mac
 static NSString *const ETICHETTA = @"local.pomodoro.biomi";   // il LaunchAgent, e l'identità dell'app
 static NSString *const APRI = @"local.pomodoro.biomi.apri";   // una seconda copia chiede alla prima di aprire la finestra
 static const double INATTIVO = 120;   // senza tastiera né mouse da così, non conta
 static const double AVVISO = 60;      // l'avviso arriva così prima della pausa
 static const int USCITA = 10;         // tocchi di fila per togliere la pausa prima
 static const double DI_FILA = 1.2;    // secondi al più fra un tocco e l'altro
-static const double LONTANO = 5 * 60; // lontano da Claude da così (un'altra app, lo schermo spento, fermo): il conto riparte da zero
+static const double LONTANO = 5 * 60; // lontano dal lavoro da così (un'altra app, lo schermo spento, fermo): il conto riparte da zero
 
 // La copertura deve poter prendere la tastiera, così quello che scrivi finisce qui.
 // È un pannello che non attiva l'app: macOS non lascia più rubare il primo piano
-// a Claude, ma lascia a un pannello così diventare la finestra che riceve i tasti.
+// all'app davanti, ma lascia a un pannello così diventare la finestra che riceve i tasti.
 @interface Copertura : NSPanel
 @property WKWebView *web;
 @property NSTextField *scritta;       // «ancora N tocchi per uscire»
@@ -36,7 +39,7 @@ static const double LONTANO = 5 * 60; // lontano da Claude da così (un'altra ap
 @end
 @implementation Copertura
 - (BOOL)canBecomeKeyWindow { return YES; }
-- (NSRect)constrainFrameRect:(NSRect)r toScreen:(NSScreen *)s { return r; }  // esattamente sopra Claude
+- (NSRect)constrainFrameRect:(NSRect)r toScreen:(NSScreen *)s { return r; }  // esattamente sopra la finestra che copre
 - (void)keyDown:(NSEvent *)e { if (getenv("POMODORO_TASTI")) fprintf(stderr, "tasto preso dal bioma\n"); }
 // I tocchi li conta l'app, qualunque sia il bioma; poi arrivano alla pagina come sempre
 - (void)sendEvent:(NSEvent *)e {
@@ -52,7 +55,7 @@ static const double LONTANO = 5 * 60; // lontano da Claude da così (un'altra ap
 @property NSPanel *avviso;
 @property NSWindow *finestra;          // il Pomodoro: minuti, bioma, la giornata
 @property WKWebView *pagina;
-@property double lavoro;      // secondi di Claude contati dall'ultima pausa
+@property double lavoro;      // secondi di lavoro contati dall'ultima pausa
 @property double pausaFino;   // epoch in secondi, 0 fuori pausa
 @property double pausaDurata; // quanto dura la pausa in corso
 @property double resta;       // secondi di lavoro alla prossima pausa
@@ -61,7 +64,7 @@ static const double LONTANO = 5 * 60; // lontano da Claude da così (un'altra ap
 @property NSInteger giri;
 @property NSInteger tocchi;
 @property double ultimoTocco;
-@property NSNumber *conSuono;   // la finestra di Claude la cui copertura suona
+@property NSNumber *conSuono;   // la finestra (o lo schermo) la cui copertura suona
 // Il giro di ogni secondo gira solo quando serve; fuori, una sveglia sola per la prossima
 // cosa da fare (la fine di una pausa, il conto che riparte)
 @property NSTimer *giro, *sveglia;
@@ -69,7 +72,7 @@ static const double LONTANO = 5 * 60; // lontano da Claude da così (un'altra ap
 @property NSTask *prova20;        // nella finestra: la pausa di prova di un bioma in corso, se c'è
 @property NSTimer *bordi;         // con una copertura: guarda se il mouse è ai bordi, per mostrare il margine
 @property double ultimoGiro;      // epoch dell'ultimo giro
-@property double ultimoSuClaude;  // epoch dell'ultimo secondo contato: Claude davanti, mani sul Mac
+@property double ultimoAlLavoro;  // epoch dell'ultimo secondo contato: l'app davanti, mani sul Mac
 @end
 
 @implementation Pomodoro
@@ -129,7 +132,7 @@ static void scriviJSON(id j, NSString *p) {
 
 // impostazioni.json: lavoro_minuti, pausa_minuti, bioma; "oggi" vale solo per la sua data;
 // luogo: {lat, lon} per il sole dei biomi (giorno, tramonto e notte veri); app: l'identificativo
-// dell'app da contare e coprire (di base Claude)
+// dell'app da contare e coprire, una lista di identificativi, o "tutto" (di base Claude)
 - (NSDictionary *)impostazioni {
   NSDictionary *j = inMemoria([self percorso:@"impostazioni.json"], 1);
   double lavoro = [j[@"lavoro_minuti"] doubleValue] ?: 45;
@@ -141,9 +144,13 @@ static void scriviJSON(id j, NSString *p) {
   }
   NSString *bioma = [j[@"bioma"] isKindOfClass:NSString.class] ? j[@"bioma"] : @"stagno";
   NSDictionary *luogo = [j[@"luogo"] isKindOfClass:NSDictionary.class] ? j[@"luogo"] : @{};
-  NSString *app = [j[@"app"] isKindOfClass:NSString.class] && [j[@"app"] length] ? j[@"app"] : CLAUDE;
+  NSMutableArray *app = [NSMutableArray array];
+  for (id a in [j[@"app"] isKindOfClass:NSArray.class] ? j[@"app"] : j[@"app"] ? @[j[@"app"]] : @[])
+    if ([a isKindOfClass:NSString.class] && [a length]) [app addObject:a];
+  if (!app.count) [app addObject:CLAUDE];
   return @{@"lavoro": @(lavoro * 60), @"pausa": @(pausa * 60), @"bioma": bioma,
-           @"lavoro_minuti": @(lavoro), @"pausa_minuti": @(pausa), @"luogo": luogo, @"app": app};
+           @"lavoro_minuti": @(lavoro), @"pausa_minuti": @(pausa), @"luogo": luogo,
+           @"app": app, @"tutto": @([app containsObject:TUTTO])};
 }
 
 // dati/pause.jsonl: una riga per ogni pausa che comincia, per la giornata
@@ -177,7 +184,7 @@ static void scriviJSON(id j, NSString *p) {
   if (self.prova > 0) return;
   NSDictionary *s = @{@"lavoro_secondi": @(self.lavoro), @"pausa_fino": @(self.pausaFino),
                       @"pausa_durata": @(self.pausaDurata), @"aggiornato": @(NSDate.date.timeIntervalSince1970),
-                      @"claude_ultimo": @(self.ultimoSuClaude), @"giorno": [self oggi], @"spento": @([self spentoFino] > 0)};
+                      @"lavoro_ultimo": @(self.ultimoAlLavoro), @"giorno": [self oggi], @"spento": @([self spentoFino] > 0)};
   [[NSFileManager defaultManager] createDirectoryAtPath:[self percorso:@"dati"] withIntermediateDirectories:YES attributes:nil error:nil];
   scriviJSON(s, [self percorso:@"dati/stato.json"]);
 }
@@ -190,16 +197,22 @@ static void scriviJSON(id j, NSString *p) {
     self.pausaDurata = [s[@"pausa_durata"] doubleValue] ?: [[self impostazioni][@"pausa"] doubleValue];
     return;
   }
-  // Lontano da Claude da meno di LONTANO: il conto riprende; se no riparte da zero
-  double ultimo = [s[@"claude_ultimo"] doubleValue] ?: [s[@"aggiornato"] doubleValue];
+  // Lontano dal lavoro da meno di LONTANO: il conto riprende; se no riparte da zero
+  double ultimo = [s[@"lavoro_ultimo"] doubleValue] ?: [s[@"aggiornato"] doubleValue];
   if (ora - ultimo < LONTANO) {
     self.lavoro = [s[@"lavoro_secondi"] doubleValue];
-    self.ultimoSuClaude = ultimo;
+    self.ultimoAlLavoro = ultimo;
   }
 }
 
-- (BOOL)claudeDavanti {
-  return [NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier isEqual:[self impostazioni][@"app"]];
+- (NSString *)davanti { return NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier; }
+
+// L'app davanti è una di quelle che contano? Con "tutto", qualunque app tranne il Pomodoro stesso
+- (BOOL)appDavanti {
+  NSDictionary *imp = [self impostazioni];
+  NSString *f = [self davanti];
+  if ([imp[@"tutto"] boolValue]) return f && ![f isEqual:NSBundle.mainBundle.bundleIdentifier];
+  return f && [imp[@"app"] containsObject:f];
 }
 
 // Coperchio chiuso, schermo spento o bloccato: non è lavoro, anche se il Mac resta sveglio
@@ -234,11 +247,11 @@ static BOOL schermoSpento(void) {
     else [self copri];
   } else {
     double fermo = CGEventSourceSecondsSinceLastEventType(kCGEventSourceStateCombinedSessionState, kCGAnyInputEventType);
-    // Lontano da Claude da cinque minuti (un'altra app, lo schermo spento) o fermo da cinque: si riparte da zero
-    if (ora - self.ultimoSuClaude >= LONTANO || fermo >= LONTANO) { self.lavoro = 0; self.avvisato = NO; }
-    if (fermo < INATTIVO && [self claudeDavanti] && !schermoSpento()) {
+    // Lontano dal lavoro da cinque minuti (un'altra app, lo schermo spento) o fermo da cinque: si riparte da zero
+    if (ora - self.ultimoAlLavoro >= LONTANO || fermo >= LONTANO) { self.lavoro = 0; self.avvisato = NO; }
+    if (fermo < INATTIVO && [self appDavanti] && !schermoSpento()) {
       self.lavoro += 1;
-      self.ultimoSuClaude = ora;
+      self.ultimoAlLavoro = ora;
     }
     self.resta = L - self.lavoro;
     if (!self.avvisato && self.resta <= AVVISO && self.resta > 0) { self.avvisato = YES; [self avvisa:@"Tra un minuto, la pausa."]; }
@@ -252,13 +265,13 @@ static BOOL schermoSpento(void) {
 
 #pragma mark - Il giro
 
-// Il giro serve con Claude davanti, in pausa (il timer nella barra, la copertura che segue Claude),
+// Il giro serve con l'app davanti, in pausa (il timer nella barra, la copertura che segue l'app),
 // o con la finestra del Pomodoro aperta e in vista. Con lo schermo spento mai.
 - (BOOL)serveIlGiro {
   if (schermoSpento()) return NO;
   if (self.finestra.isVisible && (self.finestra.occlusionState & NSWindowOcclusionStateVisible)) return YES;
   if ([self spentoFino] > 0) return NO;
-  return self.pausaFino > 0 || [self claudeDavanti];
+  return self.pausaFino > 0 || [self appDavanti];
 }
 
 // Fermo il giro, la prossima cosa che deve succedere da sola: la fine della pausa o dello
@@ -266,7 +279,7 @@ static BOOL schermoSpento(void) {
 - (double)prossimaSveglia {
   double ora = NSDate.date.timeIntervalSince1970;
   NSMutableArray<NSNumber *> *quando = [NSMutableArray arrayWithObjects:@(self.pausaFino), @([self spentoFino]), nil];
-  if (self.pausaFino == 0 && self.lavoro > 0) [quando addObject:@(self.ultimoSuClaude + LONTANO)];
+  if (self.pausaFino == 0 && self.lavoro > 0) [quando addObject:@(self.ultimoAlLavoro + LONTANO)];
   double prima = 0;
   for (NSNumber *q in quando) if (q.doubleValue > ora && (prima == 0 || q.doubleValue < prima)) prima = q.doubleValue;
   return prima;
@@ -494,15 +507,35 @@ static CGFloat mezzoCentimetro(NSRect f) {
   return 20;
 }
 
-// Una copertura su ogni finestra di Claude visibile, appena sopra di lei:
-// le finestre delle altre app che stanno sopra Claude restano sopra.
+// Una copertura su ogni finestra visibile delle app che contano, appena sopra di lei: le finestre
+// delle altre app che le stanno sopra restano sopra. Con "tutto", una copertura per schermo, sopra
+// ogni finestra (la barra in alto e il Dock restano: il 🍅 dice quanto manca).
 - (void)copri {
-  pid_t pid = [NSRunningApplication runningApplicationsWithBundleIdentifier:[self impostazioni][@"app"]].firstObject.processIdentifier;
-  NSArray *info = CFBridgingRelease(CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID));
-  CGFloat alto = NSScreen.screens.firstObject.frame.size.height;
+  NSDictionary *imp = [self impostazioni];
   NSMutableSet *viste = [NSMutableSet set];
+  if ([imp[@"tutto"] boolValue]) {
+    for (NSScreen *s in NSScreen.screens) {
+      NSNumber *chiave = @(-1 - [s.deviceDescription[@"NSScreenNumber"] integerValue]);   // negativa: non è una finestra
+      [viste addObject:chiave];
+      Copertura *c = self.coperture[chiave];
+      if (!c) {
+        BOOL suono = !self.conSuono;
+        self.coperture[chiave] = c = [self nuovaCopertura:s.frame suono:suono];
+        c.level = NSFloatingWindowLevel;
+        if (suono) self.conSuono = chiave;
+      }
+      else if (!NSEqualRects(c.frame, s.frame)) [c setFrame:s.frame display:YES];
+      [c orderFrontRegardless];
+    }
+  }
+  NSMutableSet *pid = [NSMutableSet set];
+  if (![imp[@"tutto"] boolValue])
+    for (NSString *a in imp[@"app"])
+      for (NSRunningApplication *r in [NSRunningApplication runningApplicationsWithBundleIdentifier:a]) [pid addObject:@(r.processIdentifier)];
+  NSArray *info = pid.count ? CFBridgingRelease(CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID)) : @[];
+  CGFloat alto = NSScreen.screens.firstObject.frame.size.height;
   for (NSDictionary *w in info) {
-    if (!pid || [w[(id)kCGWindowOwnerPID] intValue] != pid || [w[(id)kCGWindowLayer] intValue] != 0) continue;
+    if (![pid containsObject:w[(id)kCGWindowOwnerPID]] || [w[(id)kCGWindowLayer] intValue] != 0) continue;
     CGRect r;
     CGRectMakeWithDictionaryRepresentation((__bridge CFDictionaryRef)w[(id)kCGWindowBounds], &r);
     if (r.size.width < 300 || r.size.height < 200) continue;
@@ -526,22 +559,24 @@ static CGFloat mezzoCentimetro(NSRect f) {
     Copertura *c = self.coperture[self.conSuono];
     [c.web loadFileURL:[self scena:YES] allowingReadAccessToURL:[NSURL fileURLWithPath:self.cartella]];
   }
-  if ([self claudeDavanti]) [self prendiTastiera];
+  if ([self appDavanti] || [imp[@"tutto"] boolValue]) [self prendiTastiera];
   if (self.coperture.count && !self.bordi) {
     self.bordi = [NSTimer scheduledTimerWithTimeInterval:.08 target:self selector:@selector(guardaIBordi) userInfo:nil repeats:YES];
     self.bordi.tolerance = .02;
   }
 }
 
-// La copertura prende tutta la finestra di Claude; col mouse ai bordi (a un centimetro dall'orlo, dentro o
-// fuori) si ritira di mezzo centimetro tutt'intorno, e si vede Claude sotto. La finestra non cambia
-// misura (il bioma non si ridisegna): la maschera del layer si stringe.
+// La copertura prende tutta la finestra; col mouse ai bordi (a un centimetro dall'orlo, dentro o
+// fuori) si ritira di mezzo centimetro tutt'intorno, e si vede la finestra sotto. La copertura non
+// cambia misura (il bioma non si ridisegna): la maschera del layer si stringe. Quelle degli schermi no:
+// ai bordi di uno schermo il mouse ci va sempre.
 - (void)guardaIBordi {
   if (!self.coperture.count) { [self.bordi invalidate]; self.bordi = nil; return; }
   NSPoint m = NSEvent.mouseLocation;
-  for (Copertura *c in self.coperture.allValues) {
+  for (NSNumber *chiave in self.coperture) {
+    Copertura *c = self.coperture[chiave];
     CALayer *maschera = c.contentView.layer.mask;
-    if (!maschera) continue;
+    if (!maschera || chiave.integerValue < 0) continue;
     CGFloat mezzo = mezzoCentimetro(c.frame);
     BOOL ai = NSPointInRect(m, NSInsetRect(c.frame, -2 * mezzo, -2 * mezzo)) && !NSPointInRect(m, NSInsetRect(c.frame, 2 * mezzo, 2 * mezzo));
     NSRect dentro = c.contentView.bounds;
@@ -554,17 +589,18 @@ static CGFloat mezzoCentimetro(NSRect f) {
   }
 }
 
-// Se in pausa torni su Claude, la tastiera torna al bioma
+// Se in pausa torni sull'app (o, con "tutto", sempre), la tastiera torna al bioma
 - (void)prendiTastiera {
   Copertura *c = self.coperture.allValues.firstObject;
-  if (!c) return;
+  if (!c || c.isKeyWindow) return;
   [c makeKeyAndOrderFront:nil];
 }
 
-// Un'app passa davanti: se è Claude il giro riparte, se no si ferma (salvo in pausa)
+// Un'app passa davanti: se è una di quelle che contano il giro riparte, se no si ferma (salvo in pausa)
 - (void)attivata:(NSNotification *)n {
   NSRunningApplication *app = n.userInfo[NSWorkspaceApplicationKey];
-  if (self.pausaFino > 0 && [app.bundleIdentifier isEqual:[self impostazioni][@"app"]]) [self copri];
+  NSDictionary *imp = [self impostazioni];
+  if (self.pausaFino > 0 && ([imp[@"tutto"] boolValue] || [imp[@"app"] containsObject:app.bundleIdentifier])) [self copri];
   [self guardaIlGiro];
 }
 
@@ -637,7 +673,7 @@ static CGFloat mezzoCentimetro(NSRect f) {
     @"resta_secondi": @(self.resta), @"pausa_durata_minuti": @(self.pausaDurata / 60), @"spento_fino": @([self spentoFino]),
     @"pause_oggi": [self contaRighe:@"dati/pause.jsonl"][@"oggi"], @"uscite": [self contaRighe:@"dati/uscite.jsonl"],
     @"in_prova": self.prova20.isRunning ? self.prova20.arguments.lastObject : NSNull.null,
-    @"bioma": imp[@"bioma"], @"biomi": biomi, @"giornata": query,
+    @"bioma": imp[@"bioma"], @"biomi": biomi, @"giornata": query, @"app": imp[@"app"], @"tutto": imp[@"tutto"],
     @"lavoro_secondi": @(self.lavoro), @"pausa_fino": @(self.pausaFino), @"ora": @(NSDate.date.timeIntervalSince1970),
   };
   NSData *d = [NSJSONSerialization dataWithJSONObject:s options:0 error:nil];
@@ -646,6 +682,7 @@ static CGFloat mezzoCentimetro(NSRect f) {
 }
 
 // Dalla pagina: {tipo: "tempi", lavoro, pausa, per: "oggi"|"sempre"} · {tipo: "togli_oggi"} · {tipo: "bioma", nome}
+// · {tipo: "modo", tutto: sì|no}
 // · {tipo: "prova", nome} · {tipo: "spegni", minuti | null (fino a mezzanotte)} · {tipo: "accendi"}
 - (void)userContentController:(WKUserContentController *)u didReceiveScriptMessage:(WKScriptMessage *)m {
   NSDictionary *b = [m.body isKindOfClass:NSDictionary.class] ? m.body : @{};
@@ -655,6 +692,8 @@ static CGFloat mezzoCentimetro(NSRect f) {
     NSInteger lavoro = MIN(MAX([b[@"lavoro"] integerValue], 1), 240), pausa = MIN(MAX([b[@"pausa"] integerValue], 1), 60);
     if ([b[@"per"] isEqual:@"oggi"]) j[@"oggi"] = @{@"data": [self oggi], @"lavoro_minuti": @(lavoro), @"pausa_minuti": @(pausa)};
     else { j[@"lavoro_minuti"] = @(lavoro); j[@"pausa_minuti"] = @(pausa); j[@"oggi"] = NSNull.null; }
+  } else if ([tipo isEqual:@"modo"]) {   // cosa conta e cosa copre: tutto il Mac, o di nuovo Claude
+    if ([b[@"tutto"] boolValue]) j[@"app"] = TUTTO; else [j removeObjectForKey:@"app"];
   } else if ([tipo isEqual:@"prova"] && [b[@"nome"] isKindOfClass:NSString.class]) {
     [self provaIlBioma:b[@"nome"]];
     return;
@@ -683,7 +722,7 @@ static CGFloat mezzoCentimetro(NSRect f) {
 }
 
 // «Provalo · 20 secondi» sotto un bioma: una pausa di prova in un'altra copia dell'app (--prova, che non tocca
-// il conto né segna uscite), sopra Claude come quella vera. La finestra si fa da parte e torna alla fine.
+// il conto né segna uscite), sopra l'app come quella vera. La finestra si fa da parte e torna alla fine.
 - (void)provaIlBioma:(NSString *)nome {
   if (self.prova20.isRunning || self.pausaFino > 0 ||
       ![[NSFileManager defaultManager] fileExistsAtPath:[self percorso:[NSString stringWithFormat:@"scene/%@.html", nome]]]) return;

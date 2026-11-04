@@ -132,6 +132,15 @@
     <p id="regolaOggi"></p>
   </section>
 
+  <section aria-labelledby="t-modo">
+    <h2 id="t-modo">Cosa conta, cosa copre</h2>
+    <div class="scelta" role="group" aria-label="cosa conta e cosa copre la pausa">
+      <button data-modo="claude" aria-pressed="true">solo Claude</button>
+      <button data-modo="tutto" aria-pressed="false">tutto il Mac</button>
+    </div>
+    <p class="fioco" id="modoNota"></p>
+  </section>
+
   <section aria-labelledby="t-biomi">
     <h2 id="t-biomi">Il bioma della pausa</h2>
     <div id="biomi"></div>
@@ -161,7 +170,7 @@ function stato(s) {
   S = s;
   const oggiFile = s.file.oggi && s.file.oggi.data === s.oggi ? s.file.oggi : null;
   if (!toccata) bozza = { lavoro: Math.round(s.lavoro_minuti), pausa: Math.round(s.pausa_minuti), per: oggiFile ? 'oggi' : 'sempre' };
-  disegnaInterruttore(); disegnaConto(); disegnaTempi(oggiFile); disegnaBiomi(); disegnaOggi();
+  disegnaInterruttore(); disegnaConto(); disegnaTempi(oggiFile); disegnaModo(); disegnaBiomi(); disegnaOggi();
 }
 
 function disegnaInterruttore() {
@@ -236,8 +245,8 @@ function disegnaBiomi() {
   // La prova: sopra Claude, come la pausa vera; non tocca il conto né segna uscite
   document.querySelectorAll('.prova').forEach(b => {
     b.disabled = !!S.in_prova || S.pausa_fino > 0;
-    b.textContent = S.in_prova === b.dataset.prova ? 'In prova, sopra Claude…' : 'Provalo · 20 secondi';
-    b.title = S.pausa_fino > 0 ? 'Sei già in pausa' : 'Copre Claude per 20 secondi; dieci tocchi per uscire prima';
+    b.textContent = S.in_prova === b.dataset.prova ? 'In prova…' : 'Provalo · 20 secondi';
+    b.title = S.pausa_fino > 0 ? 'Sei già in pausa' : `Copre ${S.tutto ? 'lo schermo' : 'Claude'} per 20 secondi; dieci tocchi per uscire prima`;
   });
 }
 
@@ -245,6 +254,22 @@ function scala() {
   document.querySelectorAll('.anteprima').forEach(a => a.querySelector('iframe').style.transform = `scale(${a.clientWidth / 1280})`);
 }
 new ResizeObserver(scala).observe(document.body);
+
+// Cosa conta e cosa copre: solo Claude (le sue finestre, il resto del Mac libero), tutto il Mac
+// (qualunque app conta, la pausa copre ogni schermo), o le app scritte a mano in impostazioni.json
+const CLAUDE = 'com.anthropic.claudefordesktop';
+function disegnaModo() {
+  const app = S.app || [CLAUDE], altre = !S.tutto && !(app.length === 1 && app[0] === CLAUDE);
+  document.querySelectorAll('[data-modo]').forEach(b =>
+    b.setAttribute('aria-pressed', !altre && (b.dataset.modo === 'tutto') === !!S.tutto));
+  $('#nota').textContent = S.tutto ? 'Conta il tempo con le mani sul Mac, qualunque app sia davanti.'
+    : altre ? 'Conta solo il tempo con quelle app davanti e le mani sul Mac.' : 'Conta solo il tempo con Claude davanti e le mani sul Mac.';
+  $('#modoNota').textContent = S.tutto ? 'Conta qualunque app; la pausa copre tutti gli schermi. Per lo studio, o per il computer in generale.'
+    : altre ? `Conta e copre: ${app.join(', ')} (da impostazioni.json).`
+    : 'Conta Claude, e la pausa copre solo le sue finestre: il resto del Mac resta libero.';
+}
+document.querySelectorAll('[data-modo]').forEach(b => b.addEventListener('click', () =>
+  manda({ tipo: 'modo', tutto: b.dataset.modo === 'tutto' })));
 
 // La giornata: le pause cominciate oggi e quelle tolte prima coi dieci tocchi
 function disegnaOggi() {
@@ -282,7 +307,9 @@ if (new URLSearchParams(location.search).has('finto')) {
   stato({ oggi: new Date().toISOString().slice(0, 10), file: { lavoro_minuti: 45, pausa_minuti: 5, bioma: 'stagno', oggi: null },
     lavoro_minuti: 45, pausa_minuti: 5, bioma: 'stagno', biomi: ['giardino', 'mare', 'pioggia', 'stagno'], in_prova: null,
     lavoro_secondi: 1460, pausa_fino: 0, ora, resta_secondi: 1240, pausa_durata_minuti: 5, spento_fino: 0,
-    pause_oggi: 4, uscite: { oggi: 0, settimana: 2 }, giornata: { uscite: '0' } });
+    pause_oggi: 4, uscite: { oggi: 0, settimana: 2 }, giornata: { uscite: '0' },
+    app: [new URLSearchParams(location.search).has('tutto') ? 'tutto' : 'com.anthropic.claudefordesktop'],
+    tutto: new URLSearchParams(location.search).has('tutto') });
   manda = m => console.log('manda', m);
 }
 </script>

@@ -9,8 +9,12 @@ delle cose, niente gergo), salvo che la persona chieda altro.
 ## Cos'è, in una riga per parte
 
 - `app/pomodoro.m`: l'app per macOS, Objective-C, un file solo. Conta i secondi con
-  Claude davanti, alla soglia apre la pausa: un `NSPanel` non attivante sopra ogni
-  finestra di Claude, con dentro una `WKWebView` che carica `scene/<bioma>.html`.
+  l'app che conta davanti, alla soglia apre la pausa: un `NSPanel` non attivante sopra
+  ogni finestra di quell'app (o uno per schermo, col modo «tutto il Mac»), con dentro
+  una `WKWebView` che carica `scene/<bioma>.html`.
+- Cosa conta e cosa copre lo dice `app` in `impostazioni.json`: niente (Claude),
+  un identificativo, una lista, o `"tutto"`. Lo legge `impostazioni`, lo usano
+  `appDavanti` e `copri`; la finestra lo cambia con `{tipo: "modo", tutto}`.
 - `app/pomodoro.html`: la finestra del Pomodoro. L'app le manda `stato({...})` ogni
   due secondi; la pagina risponde con `window.webkit.messageHandlers.pomodoro.postMessage(...)`.
 - `scene/*.html`: i biomi. **Ogni `.html` in `scene/` è un bioma** che compare da
@@ -42,7 +46,8 @@ clang -fsyntax-only -Wall -fobjc-arc app/pomodoro.m
 ## Provare senza finestre (la regola)
 
 **Non aprire finestre, non rubare il primo piano, non coprire lo schermo mentre la
-persona lavora.** Una pausa di prova (`--prova`) copre davvero Claude: lanciala solo
+persona lavora.** Una pausa di prova (`--prova`) copre davvero le finestre (col modo
+«tutto il Mac», tutti gli schermi): lanciala solo
 se la persona lo chiede o dice di sì, e dille prima che succederà.
 
 Quello che si prova senza disturbare:
@@ -72,7 +77,8 @@ Quello che si prova senza disturbare:
 - **L'app, la logica**: un banco di prova. Un file `.m` che fa
   `#define main pomodoro_main` e poi `#include "app/pomodoro.m"`, con una
   sottoclasse di `Pomodoro` che riscrive quello che serve (per esempio `avvisa:`
-  che stampa invece di mostrare, `copri` che non copre), e `cartella` puntata a una
+  che stampa invece di mostrare, `copri` che non copre, `davanti` che dice un'app
+  finta: fuori dal ciclo dell'app `frontmostApplication` è vuoto), e `cartella` puntata a una
   cartella finta con la sua `dati/`. Si compila con
   `clang -fobjc-arc -Wno-everything -framework Cocoa -framework WebKit -framework ApplicationServices -framework QuartzCore banco.m -o /tmp/banco`.
   Così si provano il conto, l'avviso, il ritorno a zero, le uscite, senza finestre.
@@ -91,7 +97,7 @@ L'app apre `scene/<bioma>.html?fine=<ms epoch>&suono=1|0&uscite=N[&lat=…&lon=�
 - `fine`: quando finisce la pausa. Il timer lo disegna `pausa.js`; 2,5 secondi prima
   della fine l'audio sfuma, e alla fine deve essere silenzio.
 - `suono=0`: le anteprime nella finestra, mute. Una sola copertura suona anche con
-  più finestre di Claude.
+  più finestre coperte.
 - `uscite`: le pause tolte oggi coi dieci tocchi. Cosa farne lo decide il bioma
   (`OGGI.uscite`).
 - `lat`, `lon`: il luogo del sole, da `impostazioni.json`.
