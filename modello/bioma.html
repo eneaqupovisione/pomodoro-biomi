@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Bioma</title>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1214; cursor: pointer; user-select: none; -webkit-user-select: none; }
+  canvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; touch-action: none; }
+  .fascia { position: fixed; left: 0; right: 0; height: 16.6vh; display: flex; align-items: center; justify-content: center;
+            font-family: Silkscreen, Menlo, monospace; pointer-events: none; text-align: center; text-shadow: 0 0 12px #000; }
+  #timer { top: 0; font-size: min(9vh, 64px); letter-spacing: .08em; color: #dde6e4; }
+  #invito { bottom: 0; font-size: min(2.6vh, 20px); color: #b8c8c4; transition: opacity .8s; padding: 0 5vw; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="timer" class="fascia">5:00</div>
+<div id="invito" class="fascia">cerca la cosa più lontana che vedi</div>
+<!-- Copiato in scene/<nome>.html diventa un bioma. I percorsi sono relativi a scene/.
+     fondali/<nome>.js e suoni/<nome>.js possono mancare: il bioma va lo stesso. -->
+<script src="../musica/brani.js"></script>
+<script src="pausa.js"></script>
+<script src="fondali/NOME.js"></script>
+<script src="suoni/NOME.js"></script>
+<script>
+// Il modello di un bioma: un cielo che si fa notte col sole vero, qualche lucciola che vaga,
+// e un cerchio dove tocchi. Da qui si parte; gli altri biomi mostrano il resto.
+// pausa.js dà: giorno (1 pieno giorno, 0 notte), tramonto (0..1), audio() e AC, master,
+// fondo() (i suoni del bioma, chiamata quando parte l'audio), suono(nome), ciclo(buf),
+// colpo(buf, inizio, durata, volume, pan), rumore(secondi, passo), respiro (la musica),
+// caricaFondale(FONDALE, W, H) e OGGI.uscite.
+
+// ---------- La tela: alta FH pixel veri, larga quanto chiede la finestra ----------
+const ASPETTO = innerWidth > 0 && innerHeight > 0 ? Math.min(3, Math.max(.4, innerWidth / innerHeight)) : 1.6;
+const FH = 228, FW = 2 * Math.round(114 * ASPETTO), N = FW * FH;
+const ZT = 38, ZB = FH - 38;              // sopra e sotto: timer e invito, qui non passa niente
+const cv = document.getElementById('c'); cv.width = FW; cv.height = FH;
+const cx = cv.getContext('2d'), img = cx.createImageData(FW, FH), d = img.data;
+const rnd = Math.random;
+
+// Il fondale: quello di fondali/NOME.js se c'è, se no un cielo fatto qui
+let base = new Uint8ClampedArray(N * 3);
+function leggi(px) { base = px; }
+function cielo() {
+  for (let y = 0; y < FH; y++) for (let x = 0; x < FW; x++) {
+    const i = (y * FW + x) * 3, q = y / FH;
+    base[i] = 40 + 60 * q; base[i + 1] = 70 + 50 * q; base[i + 2] = 110 + 30 * q;
+  }
+}
+
+// ---------- La luce: giorno, tramonto e notte vengono da pausa.js ----------
+function colora() {
+  const r0 = .3 + .7 * giorno, g0 = .38 + .62 * giorno, b0 = .6 + .4 * giorno, caldo = tramonto * 30;
+  for (let i = 0; i < d.length; i += 4) { d[i] = d[i] * r0 + caldo; d[i + 1] = d[i + 1] * g0 + caldo * .3; d[i + 2] = d[i + 2] * b0 - caldo * .3; }
+}
+
+// ---------- Le cose che si muovono ----------
+const lucciole = Array.from({ length: 14 }, () => ({ x: rnd() * FW, y: ZT + rnd() * (ZB - ZT), a: rnd() * 6.3 }));
+const cerchi = [];
+function punto(x, y, r, g, b, v) {
+  x = Math.round(x); y = Math.round(y); if (x < 0 || y < 0 || x >= FW || y >= FH) return;
+  const j = (y * FW + x) * 4; d[j] += (r - d[j]) * v; d[j + 1] += (g - d[j + 1]) * v; d[j + 2] += (b - d[j + 2]) * v;
+}
+
+// ---------- I suoni: un fondo di rumore piano, fatto qui (o le registrazioni di suoni/NOME.js) ----------
+fondo = () => {
+  const s = rumore(6, .02), f = AC.createBiquadFilter(), g = AC.createGain();
+  f.type = 'lowpass'; f.frequency.value = 500; g.gain.value = .05;
+  s.connect(f); f.connect(g); g.connect(master); s.start();
+};
+
+// ---------- Il tocco ----------
+cv.addEventListener('pointerdown', e => {
+  audio(); if (AC && AC.state === 'suspended' && !document.hidden) AC.resume();
+  const r = cv.getBoundingClientRect();
+  cerchi.push({ x: (e.clientX - r.left) / r.width * FW, y: (e.clientY - r.top) / r.height * FH, t0: performance.now() });
+});
+
+// ---------- Il giro ----------
+function frame(t) {
+  for (let i = 0, j = 0; i < N; i++, j += 4) { d[j] = base[i * 3]; d[j + 1] = base[i * 3 + 1]; d[j + 2] = base[i * 3 + 2]; d[j + 3] = 255; }
+  colora();
+  const buio = 1 - giorno;
+  for (const L of lucciole) {
+    L.a += (rnd() - .5) * .3; L.x = (L.x + Math.cos(L.a) * .15 + FW) % FW; L.y = Math.min(ZB, Math.max(ZT, L.y + Math.sin(L.a) * .1));
+    punto(L.x, L.y, 230, 240, 140, (.25 + .75 * buio) * (.6 + .4 * Math.sin(t * .003 + L.a)));
+  }
+  for (let k = cerchi.length - 1; k >= 0; k--) {
+    const c = cerchi[k], e = (t - c.t0) / 1400; if (e > 1) { cerchi.splice(k, 1); continue; }
+    for (let a = 0; a < 6.28; a += .08) punto(c.x + Math.cos(a) * e * 20, c.y + Math.sin(a) * e * 10, 220, 235, 240, .5 * (1 - e));
+  }
+  cx.putImageData(img, 0, 0);
+  requestAnimationFrame(frame);
+}
+audio();
+if (typeof FONDALE !== 'undefined') caricaFondale(FONDALE, FW, FH).then(px => { leggi(px); requestAnimationFrame(frame); });
+else { cielo(); requestAnimationFrame(frame); }
+</script>
+</body>
+</html>

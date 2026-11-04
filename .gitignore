@@ -1,0 +1,20 @@
+# Della persona che lo usa
+impostazioni.json
+dati/
+
+# Costruita da costruisci.command
+app/Pomodoro.app/
+
+# La musica non si ridistribuisce: musica/LEGGIMI.md
+musica/**
+!musica/*/
+!musica/LEGGIMI.md
+!musica/elenca.sh
+!musica/brani.js
+!musica/*/.gitkeep
+
+# Le registrazioni intere dei suoni: si scaricano dai link di scene/suoni/LEGGIMI.md
+scene/suoni/originali/
+
+.DS_Store
+__pycache__/

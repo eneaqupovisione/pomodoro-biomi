@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Stagno</title>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #071618; cursor: pointer; user-select: none; -webkit-user-select: none; }
+  canvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; touch-action: none; }
+  .fascia { position: fixed; left: 0; right: 0; height: 16.6vh; display: flex; align-items: center; justify-content: center;
+            font-family: Silkscreen, Menlo, monospace; pointer-events: none; text-align: center; }
+  #timer { top: 0; font-size: min(9vh, 64px); letter-spacing: .08em; color: #cfe0d4; }
+  #invito { bottom: 0; font-size: min(2.6vh, 20px); color: #a8c4b6; transition: opacity .8s; padding: 0 5vw; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="timer" class="fascia">5:00</div>
+<div id="invito" class="fascia">cerca la cosa più lontana che vedi</div>
+<script src="../musica/brani.js"></script>
+<script src="pausa.js"></script>
+<script src="fondali/stagno.js"></script>
+<script src="suoni/stagno.js"></script>
+<script>
+// Lo stagno della pausa. La query, il sole, il timer, gli inviti, la campana
+// e la musica stanno in pausa.js, comuni a tutti i biomi. L'acqua, le ninfee e le canne
+// sono il fondale fatto con Gemini (fondali/stagno-gemini.jpg); koi, rana, libellula,
+// foglie, cerchi, lucciole e luna sono codice.
+
+// ---------- La tela: alta 192 pixel fini, larga quanto chiede la finestra ----------
+const ASPETTO = innerWidth > 0 && innerHeight > 0 ? Math.min(3, Math.max(.4, innerWidth / innerHeight)) : 1.6;
+const FH = 192, FW = 2 * Math.round(96 * ASPETTO);
+const CW = FW / 2, CH = 96;                  // la griglia grossa: acqua, ninfee, rana
+const ZT = 32, ZB = FH - 32;                 // sopra e sotto: timer e invito, qui non passa niente
+const cv = document.getElementById('c'); cv.width = FW; cv.height = FH;
+const cx = cv.getContext('2d'), img = cx.createImageData(FW, FH), d = img.data;
+
+const hx = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const P = {
+  wd: hx('#071618'), w0: hx('#0b1f22'), w1: hx('#0f2a2c'), w2: hx('#143537'), w3: hx('#1c4644'), hi: hx('#2f6660'),
+  ring: hx('#7fb3a6'), pad: hx('#2e5a2a'), pad2: hx('#3d7335'), padd: hx('#21431f'), fl: hx('#d98aa0'), fl2: hx('#f2c6d0'),
+  reed: hx('#1f3a1c'), reed2: hx('#2b4d25'), sh: hx('#051012'), fr: hx('#4f8a3a'), fr2: hx('#6aa84f'), frd: hx('#35602a'),
+  eye: hx('#d8e86a'), db: hx('#3fa0c8'), db2: hx('#2a7a9c'), dw: hx('#d4eaee'), tongue: hx('#d86a7a'),
+  moon: hx('#c9d6c4'), fly: hx('#e4f58a'),
+};
+function set(x, y, c) { x = Math.round(x); y = Math.round(y); if (x < 0 || y < 0 || x >= FW || y >= FH) return; const i = (y * FW + x) * 4; d[i] = c[0]; d[i + 1] = c[1]; d[i + 2] = c[2]; d[i + 3] = 255; }
+function mix(x, y, c, a) { x = Math.round(x); y = Math.round(y); if (x < 0 || y < 0 || x >= FW || y >= FH) return; const i = (y * FW + x) * 4; d[i] += (c[0] - d[i]) * a; d[i + 1] += (c[1] - d[i + 1]) * a; d[i + 2] += (c[2] - d[i + 2]) * a; }
+function set2(x, y, c) { x = Math.round(x) * 2; y = Math.round(y) * 2; set(x, y, c); set(x + 1, y, c); set(x, y + 1, c); set(x + 1, y + 1, c); }
+const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+
+const AUTUNNO = [8, 9, 10].includes(MESE);
+
+// ---------- I suoni: registrati (suoni/stagno.js), più i grilli fatti qui ----------
+// Il sottofondo di uno stagno: qualche uccellino, qualche gracidio e i grilli. Quelli di prima,
+// registrati piano e alzati, portavano un fruscio; questi sono forti e vengono abbassati.
+let ranaBuf = null;
+const uccelli = {};            // pettirosso e merlo: i versi in fila, con la loro sfumatura dentro
+const GRACIDII = [0, .8, 1.6, 2.4, 3.2];   // i 5 gracidii della rana verde, mezzo secondo l'uno, già sfumati
+const VERSI = {                // [inizio, durata] nelle registrazioni impacchettate (suoni/impacchetta.sh)
+  pettirosso: [[0, 3.7], [4, 3.4], [7.7, 3.5], [11.5, 4.3], [16.1, 4.7], [21.1, 3.7], [25.1, 4.1], [29.5, 4], [33.8, 4.4], [38.5, 4]],
+  merlo: [[0, 3.2], [3.5, 3.3], [7.1, 3.9], [11.3, 2.6], [14.2, 3.6], [18.1, 4.1], [22.5, 3.5], [26.3, 4.1], [30.7, 2.7]],
+};
+fondo = () => {
+  suono('rana').then(b => ranaBuf = b).catch(() => {});
+  for (const n in VERSI) suono(n).then(b => uccelli[n] = b).catch(() => {});
+  for (const n in ACQUA) suono(n).then(b => acquaBuf[n] = b).catch(() => {});
+  // le raganelle, il «ribbit» dei film: un coro fitto e basso, di giorno e di notte. Ha preso il posto
+  // dei gracidii della rana verde, che non suonavano come le rane dei film
+  const rg = AC.createGain(); rg.gain.value = 0; rg.connect(master);
+  suono('raganelle').then(b => { const s = ciclo(b, 2); s.connect(rg); s.start(); rg.gain.setTargetAtTime(.7, AC.currentTime, 2); }).catch(() => {});
+  // di giorno lo stagno (rane, uccelli, insetti), di notte la palude; al tramonto tutti e due
+  for (const [nome, v] of [['giorno', giorno], ['notte', 1 - giorno]]) {
+    if (v < .05) continue;
+    const g = AC.createGain(); g.gain.value = 0; g.connect(master);
+    suono(nome).then(b => { const s = ciclo(b, 2); s.connect(g); s.start(); g.gain.setTargetAtTime(.75 * v, AC.currentTime, 1.5); }).catch(() => {});
+  }
+};
+function canta() {             // un pettirosso o un merlo, da un lato o dall'altro; solo di giorno
+  const pronti = Object.keys(uccelli); if (!AC || !pronti.length || giorno < .4) return;
+  const n = pronti[Math.floor(Math.random() * pronti.length)], [s, dur] = VERSI[n][Math.floor(Math.random() * VERSI[n].length)];
+  colpo(uccelli[n], s, dur, .16 + Math.random() * .14, (Math.random() < .5 ? -1 : 1) * (.3 + Math.random() * .6));
+}
+// L'acqua ha tre voci registrate, una per chi la tocca (il dito, la rana, la foglia). Prima
+// erano tutte lo stesso plic fatto col codice, poco acquoso.
+const ACQUA = {                // [inizi dei pezzi, durata]: in fila, già sfumati (suoni/impacchetta.sh)
+  tocco: [[0, .9, 1.8, 2.7, 3.6, 4.5, 5.4, 6.3, 7.2, 8.1], .6],   // una mano che si muove piano nell'acqua
+  tonfo: [[0, .8, 1.6], .5],                                       // la rana che atterra
+  goccia: [[0], .39],                                              // una foglia che si posa
+};
+const acquaBuf = {};
+function bagna(nome, volume, x) {   // un pezzo a caso, dal lato di x, appena più alto o più basso
+  const b = acquaBuf[nome]; if (!AC || !b) return;
+  const [inizi, dur] = ACQUA[nome], s = AC.createBufferSource(), g = AC.createGain(), p = AC.createStereoPanner();
+  s.buffer = b; s.playbackRate.value = .9 + Math.random() * .2; g.gain.value = volume;
+  p.pan.value = Math.max(-1, Math.min(1, (x / FW - .5) * 1.2));
+  s.connect(g); g.connect(p); p.connect(master); s.start(AC.currentTime, inizi[Math.floor(Math.random() * inizi.length)], dur);
+}
+function gracida() {           // la rana registrata, dal suo lato; se manca, quella fatta qui
+  if (!AC) return;
+  if (ranaBuf) {               // suonati così come sono: la rampa di colpo() smusserebbe l'attacco
+    const s = AC.createBufferSource(), g = AC.createGain(), p = AC.createStereoPanner();
+    s.buffer = ranaBuf; g.gain.value = .8 + Math.random() * .2; p.pan.value = rana ? Math.max(-1, Math.min(1, (rana.x / CW - .5) * 1.2)) : 0;
+    s.connect(g); g.connect(p); p.connect(master); s.start(AC.currentTime, GRACIDII[Math.floor(Math.random() * GRACIDII.length)], .5);
+    return;
+  }
+  const t0 = AC.currentTime;
+  for (let k = 0; k < 2 + (Math.random() < .4); k++) {
+    const t = t0 + k * 0.3, o = AC.createOscillator(), am = AC.createOscillator(), amg = AC.createGain(), base = AC.createGain(), g = AC.createGain(), bp = AC.createBiquadFilter();
+    o.type = 'sawtooth'; o.frequency.value = 90 + Math.random() * 25; am.frequency.value = 26;
+    amg.gain.value = 0.5; base.gain.value = 0.5; am.connect(amg); amg.connect(base.gain);
+    bp.type = 'bandpass'; bp.frequency.value = 650; bp.Q.value = 2.5;
+    inviluppo(g, t, 0.07, 0.03, 0.18); o.connect(bp); bp.connect(base); base.connect(g); g.connect(master);
+    o.start(t); am.start(t); o.stop(t + 0.25); am.stop(t + 0.25);
+  }
+}
+function grillo() {
+  if (!AC) return; const t0 = AC.currentTime, p = AC.createStereoPanner(), f = 4150 + Math.random() * 300;   // ogni grillo dal suo posto
+  p.pan.value = Math.random() * 1.6 - .8; p.connect(master);
+  for (let k = 0; k < 3; k++) { const t = t0 + k * 0.06, o = AC.createOscillator(), g = AC.createGain(); o.frequency.value = f; inviluppo(g, t, 0.022, 0.005, 0.03); o.connect(g); g.connect(p); o.start(t); o.stop(t + 0.05); }
+}
+// ---------- L'acqua: il fondale, che luccica; le ninfee si trovano dal verde ----------
+let base = null, verde = null, acqua = null, ninfee = [], rana = null;
+function leggi(px) {
+  base = px; verde = new Uint8Array(FW * FH); acqua = new Uint8Array(FW * FH);
+  for (let i = 0; i < FW * FH; i++) { const r = px[i * 3], g = px[i * 3 + 1], b = px[i * 3 + 2]; if ((g > b + 14 && g > 50) || (r > 110 && r > g + 15)) verde[i] = 1; }   // ninfee (verde spento, 83,92,64) e fiori
+  // le macchie verdi abbastanza grandi e non alte e strette (quelle sono canne) sono ninfee
+  const visto = new Uint8Array(FW * FH), macchie = [];
+  for (let s = 0; s < FW * FH; s++) {
+    if (!verde[s] || visto[s]) continue;
+    const coda = [s]; visto[s] = 1; let n = 0, sx = 0, sy = 0, x0 = FW, x1 = 0, y0 = FH, y1 = 0;
+    while (coda.length) {
+      const i = coda.pop(), x = i % FW, y = (i - x) / FW; n++; sx += x; sy += y; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+      for (const j of [i - 1, i + 1, i - FW, i + FW]) if (j >= 0 && j < FW * FH && verde[j] && !visto[j]) { visto[j] = 1; coda.push(j); }
+    }
+    const w = x1 - x0 + 1, h = y1 - y0 + 1;
+    if (n >= 20 && h < w * 1.8 && y0 > ZT - 6 && y1 < ZB + 6) macchie.push({ x: sx / n, y: sy / n, n, w, h });
+  }
+  for (let i = 0; i < FW * FH; i++) if (!verde[i] && px[i * 3 + 2] > px[i * 3] + 15) acqua[i] = 1;   // le canne e il resto non luccicano
+  macchie.sort((a, b) => b.n - a.n);
+  ninfee = macchie.slice(0, 8).map(m => ({ x: Math.round(m.x / 2), y: Math.round(m.y / 2) + 1 }));
+  if (ninfee.length < 2) ninfee = [{ x: Math.round(CW * .25), y: 64 }, { x: Math.round(CW * .75), y: 32 }];
+  rana = { x: ninfee[0].x, y: ninfee[0].y - 2, ninfea: 0, salto: null, ultimo: 0, lingua: null, gonfia: 0 };
+  // più scuro verso il timer e l'invito, senza bande
+  for (let y = 0; y < FH; y++) {
+    const q = 1 - .5 * Math.max(1 - sm(0, ZT + 8, y), sm(FH - ZT - 8, FH, y));
+    for (let x = 0; x < FW; x++) { const i = (y * FW + x) * 3; px[i] *= q; px[i + 1] *= q; px[i + 2] *= q; }
+  }
+}
+function acquaDisegna(t) {        // ogni pixel d'acqua prende il colore di un vicino che si muove piano
+  for (let y = 0, i = 0; y < FH; y++) for (let x = 0; x < FW; x++, i++) {
+    let s = i;
+    if (acqua[i]) {
+      const dx = Math.round(Math.sin(t * .0009 + y * .27 + Math.sin(x * .04 + t * .0003) * 2) * .7), dy = Math.round(Math.sin(t * .0007 + x * .19) * .5);
+      const q = i + dx + dy * FW; if (q >= 0 && q < FW * FH && acqua[q]) s = q;
+    }
+    const j = i * 4; d[j] = base[s * 3]; d[j + 1] = base[s * 3 + 1]; d[j + 2] = base[s * 3 + 2]; d[j + 3] = 255;
+  }
+}
+
+// ---------- Le koi: quattro, ognuna sceglie dove andare e sente le altre ----------
+const R = hx('#d24a2a'), Wt = hx('#ece6da'), G = hx('#e0b040'), B = hx('#262626'), A = hx('#7d93a8'), O = hx('#d9732e');
+const motivi = [
+  [Wt, R, R, Wt, R, R, R, Wt, Wt, R, R, Wt, Wt, Wt, Wt, Wt],   // kohaku
+  Array(16).fill(G),                                             // yamabuki
+  [B, R, Wt, B, B, R, R, B, Wt, B, R, B, B, B, B, B],            // showa
+  [Wt, A, A, A, A, A, A, A, A, A, O, O, A, A, A, A],             // asagi
+];
+const prof = [2.2, 3, 3.8, 4.4, 4.6, 4.6, 4.4, 4, 3.6, 3.1, 2.6, 2.1, 1.7, 1.3, 1, .8];
+const scuro = c => c.map(v => v * .72);
+const koi = motivi.map((p, i) => {
+  const f = { x: FW * (.25 + i * .17), y: 70 + (i % 2) * 45, a: i * 1.7, v0: .11 - .01 * i, v: .1, p, ph: i * 1.9, s1: 1 + i * .37, tr: [], pts: [], meta: null };
+  for (let k = 0; k < 200; k++) f.tr.push([f.x - Math.cos(f.a) * k * .2, f.y - Math.sin(f.a) * k * .2]);
+  return f;
+});
+function nuota(f, t, k) {
+  let gira = Math.sin(t * .00019 * f.s1 + f.ph) * .0035, vel = f.v0;
+  if (f.x < 60 || f.x > FW - 60 || f.y < ZT + 28 || f.y > ZB - 28) gira += wrap(Math.atan2(FH / 2 - f.y, FW / 2 - f.x) - f.a) * .005;
+  if (f.meta) {
+    const dx = f.meta.x - f.x, dy = f.meta.y - f.y;
+    if (performance.now() > f.meta.fino || Math.hypot(dx, dy) < 10) f.meta = null;
+    else { gira += wrap(Math.atan2(dy, dx) - f.a) * .01; vel = f.v0 * 1.8; }
+  }
+  for (const o of koi) {          // davanti a un'altra koi: rallenta e gira prima di toccarla
+    if (o === f) continue;
+    const lx = f.x + Math.cos(f.a) * 8, ly = f.y + Math.sin(f.a) * 8;
+    for (let q = 0; q < o.pts.length; q += 2) {
+      const dx = o.pts[q][0] - lx, dy = o.pts[q][1] - ly, dd = Math.hypot(dx, dy);
+      if (dd < 26) { const s = (26 - dd) / 26; gira -= Math.sign(wrap(Math.atan2(dy, dx) - f.a) || 1) * s * .02; vel *= 1 - .4 * s; }
+    }
+  }
+  f.v += (vel - f.v) * .03 * k;
+  f.a += Math.max(-.03, Math.min(.03, gira)) * k;
+  f.x += Math.cos(f.a) * f.v * k; f.y += Math.sin(f.a) * f.v * k * .85;
+  f.tr.unshift([f.x, f.y]); if (f.tr.length > 600) f.tr.pop();
+  const pts = []; let acc = 0, serve = 0;          // il corpo segue la scia della testa
+  for (let j = 1; j < f.tr.length && pts.length < 16; j++) {
+    acc += Math.hypot(f.tr[j][0] - f.tr[j - 1][0], f.tr[j][1] - f.tr[j - 1][1]);
+    while (acc >= serve && pts.length < 16) { pts.push(f.tr[j]); serve += 2.3; }
+  }
+  f.pts = pts;
+}
+function koiDisegna(f, t, ombra) {
+  const pts = f.pts;
+  for (let i = 0; i < pts.length; i++) {
+    const [x, y] = pts[i], nb = pts[i + 1] || pts[i];
+    let dx = x - nb[0], dy = y - nb[1]; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+    const wig = Math.sin(t * .0017 + f.ph - i * .42) * (i / 16) * 1.6;
+    const X = x - dy * wig, Y = y + dx * wig, w = prof[i], c = f.p[i], w2 = w * w;
+    if (ombra) { for (let yy = -w; yy <= w; yy++) for (let xx = -w; xx <= w; xx++) if (xx * xx + yy * yy <= w2) mix(X + xx + 3, Y + yy + 6, P.sh, .35); continue; }
+    for (let yy = -w; yy <= w; yy++) for (let xx = -w; xx <= w; xx++) { const r = xx * xx + yy * yy; if (r <= w2) set(X + xx, Y + yy, r > (w - 1.1) * (w - 1.1) ? scuro(c) : c); }
+    if (i === 4) for (let k = 2; k <= 6; k++) {
+      const sp = Math.sin(t * .0012 + f.ph) * .25;
+      mix(X - dy * (w + k * .7) - dx * k * .6 * (1 + sp), Y + dx * (w + k * .7) - dy * k * .6, c, .45);
+      mix(X + dy * (w + k * .7) - dx * k * .6 * (1 - sp), Y - dx * (w + k * .7) - dy * k * .6, c, .45);
+    }
+    if (i === 15) for (let k = 1; k <= 8; k++) for (const s of [-1, 1]) {
+      const an = Math.atan2(-dy, -dx) + s * (.45 + Math.sin(t * .0017 + f.ph) * .12);
+      mix(X + Math.cos(an) * k, Y + Math.sin(an) * k, c, .5);
+    }
+    if (i === 0) { mix(X + dx * 2 - dy * 2, Y + dy * 2 + dx * 2, P.sh, .6); mix(X + dx * 2 + dy * 2, Y + dy * 2 - dx * 2, P.sh, .6); }
+  }
+}
+
+// ---------- I cerchi: solo dal tuo tocco e dalle foglie ----------
+let cerchi = [];
+function cerchio(x, y, piccolo) { cerchi.push({ x, y, t: performance.now(), piccolo }); }
+function suAcqua(x, y) {        // i cerchi solo sull'acqua: su ninfee e canne niente onde
+  let n = 0; x = Math.round(x); y = Math.round(y);   // un dito è largo: bastano pochi pixel di canna intorno
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const X = x + dx, Y = y + dy; if (X >= 0 && Y >= 0 && X < FW && Y < FH && !acqua[Y * FW + X]) n++; }
+  return n < 4;
+}
+function cerchioDisegna(r) {
+  const age = (performance.now() - r.t) / 1000, vita = r.piccolo ? 2.4 : 4.5; if (age > vita) return false;
+  for (const [dl, al] of [[0, 1], [.45, .55]]) {
+    const ag = age - dl; if (ag < 0) continue;
+    const rad = ag * (r.piccolo ? 8 : 15), a = (1 - age / vita) * .6 * al;
+    for (let k = 0; k < 140; k++) {
+      const th = k / 140 * Math.PI * 2, X = Math.round(r.x + Math.cos(th) * rad), Y = Math.round(r.y + Math.sin(th) * rad * .5);
+      if (X >= 0 && Y >= 0 && X < FW && Y < FH && acqua[Y * FW + X]) mix(X, Y, P.ring, a);   // le onde non salgono su ninfee e canne
+    }
+  }
+  return true;
+}
+
+// ---------- Le foglie ----------
+const COLORI_FOGLIE = AUTUNNO
+  ? [[hx('#9a6a28'), hx('#c4923c')], [hx('#a8452a'), hx('#9a6a28')], [hx('#c8a040'), hx('#c4923c')]]
+  : [[hx('#3d6b2a'), hx('#5a8a3a')], [hx('#4f7a30'), hx('#3d6b2a')]];
+const foglie = [];
+function nuovaFoglia() {
+  return { x: 30 + Math.random() * (FW - 60), y: -6, ty: ZT + 14 + Math.random() * (ZB - ZT - 28), vx: (Math.random() - .5) * .04,
+           ph: Math.random() * 6, posata: false, c: COLORI_FOGLIE[Math.floor(Math.random() * COLORI_FOGLIE.length)], eta: 0 };
+}
+function foglia(l, t, k) {
+  if (!l.posata) {
+    l.y += .12 * k; l.x += Math.sin(t * .0016 + l.ph) * .22 * k;
+    if (l.y >= l.ty) { l.posata = true; cerchio(l.x, l.y, true); bagna('goccia', .25, l.x); }
+  } else { l.x += l.vx * k; l.eta += k; }
+  const an = l.posata ? Math.sin(t * .0003 + l.ph) * .5 : Math.sin(t * .002 + l.ph) * 1.2, ca = Math.cos(an), sa = Math.sin(an);
+  const svanisce = l.posata ? Math.max(0, 1 - Math.max(0, l.eta - 2400) / 600) : 1;
+  for (let i = -3; i <= 3; i++) for (let j = -1; j <= 1; j++) {
+    if (Math.abs(i) === 3 && j) continue;
+    mix(l.x + i * ca - j * sa, l.y + i * sa + j * ca, (i + j) & 1 ? l.c[0] : l.c[1], svanisce);
+  }
+  return svanisce > 0;
+}
+
+// ---------- La rana ----------
+const ranaSprite = ["e   e", "ggggg", "gGgGg", "ggggg", "d   d"];
+function salta(t) {
+  let n; do { n = Math.floor(Math.random() * ninfee.length); } while (n === rana.ninfea);
+  rana.salto = { a: [rana.x, rana.y], b: [ninfee[n].x, ninfee[n].y - 2], t0: t, n };
+}
+function ranaDisegna(t) {
+  if (!rana.salto && !rana.lingua && t - rana.ultimo > 38000) salta(t);
+  let X = rana.x, Y = rana.y, su = 0;
+  if (rana.salto) {
+    const q = Math.min(1, (t - rana.salto.t0) / 2000), e = q * q * (3 - 2 * q);
+    X = rana.salto.a[0] + (rana.salto.b[0] - rana.salto.a[0]) * e; Y = rana.salto.a[1] + (rana.salto.b[1] - rana.salto.a[1]) * e;
+    su = Math.sin(q * Math.PI) * 12;
+    if (q >= 1) { rana.x = X; rana.y = Y; rana.ninfea = rana.salto.n; rana.salto = null; rana.ultimo = t; cerchio(X * 2, Y * 2 + 4, true); bagna('tonfo', .35, X * 2); }
+  }
+  if (su > 0) for (let i = 0; i < 5; i++) for (let j = 0; j < 2; j++) mix(X * 2 - 4 + i * 2, Y * 2 + 4 + j, P.sh, .5);
+  ranaSprite.forEach((riga, j) => [...riga].forEach((ch, i) => {
+    const c = ch === 'g' ? P.fr : ch === 'G' ? P.fr2 : ch === 'd' ? P.frd : ch === 'e' ? P.eye : null;
+    if (c) set2(X - 2 + i, Y - 2 + j - su, c);
+  }));
+  const gola = t - rana.gonfia < 1200 || Math.sin(t * .0025) > .4;
+  if (gola) { set2(X, Y - 1 - su, P.fr2); if (t - rana.gonfia < 1200) { set2(X - 1, Y - 1 - su, P.fr2); set2(X + 1, Y - 1 - su, P.fr2); } }
+  if (rana.lingua) {               // fuori in 0,25 s, dentro con la libellula in 0,35 s
+    const L = rana.lingua, q = Math.min(1, (t - L.t0) / 600), bx = X * 2 + 1, by = Y * 2 - 4;
+    const fuori = q < .4 ? q / .4 : 1 - (q - .4) / .6, tx = bx + (L.x - bx) * fuori, ty = by + (L.y - by) * fuori;
+    for (let s = 0; s <= 1; s += .04) set(bx + (tx - bx) * s, by + (ty - by) * s, P.tongue);
+    if (q >= .4) { libellula.x = tx; libellula.y = ty; }
+    if (q >= 1) { rana.lingua = null; libellula.on = false; libellula.ultima = t; rana.gonfia = t; }
+  }
+}
+
+// ---------- La libellula: scatta, si ferma di colpo, trema sospesa, riparte ----------
+const libellula = { on: false, st: 'ferma', ultima: -10000 };
+function libellulaDisegna(t) {
+  const L = libellula;
+  if (!L.on) {
+    if (giorno > .5 && t - L.ultima > 16000) {
+      Object.assign(L, { on: true, x: Math.random() < .5 ? -10 : FW + 10, y: ZT + 20 + Math.random() * (ZB - ZT - 40), st: 'scatto', t0: t, dur: 900, scatti: 3 + Math.floor(Math.random() * 4) });
+      L.fx = L.x; L.fy = L.y; L.tx = 60 + Math.random() * (FW - 120); L.ty = ZT + 20 + Math.random() * (ZB - ZT - 40); L.verso = L.tx > L.x ? 1 : -1;
+    }
+    return;
+  }
+  if (L.st === 'scatto') {
+    const q = Math.min(1, (t - L.t0) / L.dur), e = 1 - Math.pow(1 - q, 3);
+    L.x = L.fx + (L.tx - L.fx) * e; L.y = L.fy + (L.ty - L.fy) * e;
+    if (q >= 1) { L.st = 'ferma'; L.fino = t + 600 + Math.random() * 1800; }
+  } else if (L.st === 'ferma') {
+    L.x += Math.sin(t * .013) * .12; L.y += Math.cos(t * .017) * .1;
+    const rx = rana.x * 2, ry = rana.y * 2 - 4;
+    if (!rana.salto && !rana.lingua && Math.hypot(L.x - rx, L.y - ry) < 55 && Math.random() < .02) {
+      rana.lingua = { t0: t, x: L.x, y: L.y }; L.st = 'presa';   // la lingua è muta: il suo fischio era un rumore strano
+    } else if (t > L.fino) {
+      L.scatti--; L.fx = L.x; L.fy = L.y;
+      if (L.scatti <= 0) { L.tx = Math.random() < .5 ? -30 : FW + 30; L.ty = L.y + (Math.random() - .5) * 40; }
+      else if (Math.random() < .3) { L.tx = rx + (Math.random() - .5) * 60; L.ty = Math.max(ZT + 12, ry - 14 - Math.random() * 16); }
+      else {
+        const an = Math.random() * Math.PI * 2, ds = 30 + Math.random() * 70;
+        L.tx = Math.max(30, Math.min(FW - 30, L.x + Math.cos(an) * ds)); L.ty = Math.max(ZT + 12, Math.min(ZB - 12, L.y + Math.sin(an) * ds * .6));
+      }
+      L.verso = L.tx > L.x ? 1 : -1; L.st = 'scatto'; L.t0 = t; L.dur = 250 + Math.random() * 350;
+    }
+  }
+  if (L.x < -25 || L.x > FW + 25) { L.on = false; L.ultima = t; return; }
+  const X = L.x, Y = L.y, s = L.verso;
+  for (let q = 0; q < 11; q++) set(X - s * q, Y, q < 3 ? P.db : (q % 2 ? P.db2 : P.db));
+  set(X, Y - 1, P.db); set(X + s, Y, P.db);
+  if (L.st === 'presa') return;
+  const ali = .3 + .2 * Math.abs(Math.sin(t * .06));
+  for (let q = 1; q <= 6; q++) for (const w of [2, 5]) for (const ww of [w, w + 1]) { mix(X - s * ww, Y - q, P.dw, ali); mix(X - s * ww, Y + q, P.dw, ali); }
+}
+
+// ---------- La luce del giorno, la luna e le lucciole ----------
+function colora() {
+  const r0 = .36 + .64 * giorno, g0 = .44 + .56 * giorno, b0 = .72 + .28 * giorno, caldo = tramonto * 26, blu = (1 - giorno) * 7;
+  for (let i = 0; i < d.length; i += 4) {
+    d[i] = d[i] * r0 + caldo; d[i + 1] = d[i + 1] * g0 + caldo * .25; d[i + 2] = d[i + 2] * b0 + blu - caldo * .3;
+  }
+}
+const lucciole = Array.from({ length: 7 }, (_, i) => ({ x: Math.random() * FW, y: ZT + 10 + Math.random() * (ZB - ZT - 20), ph: i * 1.3, a: Math.random() * 6 }));
+function notte(t) {
+  const n = 1 - giorno; if (n < .05) return;
+  const mx = FW * .68;
+  for (let y = 54; y < 92; y += 2) {
+    const w = (6 + Math.sin(y * .7 + t * .001) * 3) * (1 - Math.abs(y - 73) / 22), o = Math.sin(y * 1.3 + t * .0008) * 3;
+    for (let x = -w; x <= w; x++) mix(mx + o + x, y, P.moon, .22 * n * (1 - Math.abs(x) / (w + 1)));
+  }
+  for (const f of lucciole) {
+    f.a += Math.sin(t * .0004 + f.ph) * .02; f.x += Math.cos(f.a) * .08; f.y += Math.sin(f.a) * .05;
+    if (f.x < 10 || f.x > FW - 10 || f.y < ZT + 6 || f.y > ZB - 6) f.a += Math.PI;
+    const b = Math.max(0, Math.sin(t * .0018 + f.ph * 2)) * n;
+    mix(f.x, f.y, P.fly, b); for (const [a, c] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) mix(f.x + a, f.y + c, P.fly, b * .35);
+  }
+}
+
+// ---------- Il tocco ----------
+let ultimoTocco = 0, giu = false, tAdesso = 0;
+function tocca(e, trascina) {
+  audio(); if (AC && AC.state === 'suspended' && !document.hidden) AC.resume();
+  const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * FW, y = (e.clientY - r.top) / r.height * FH, ora = performance.now();
+  if (ora - ultimoTocco < 160) return; ultimoTocco = ora;
+  if (!rana.salto && !rana.lingua && Math.hypot(rana.x * 2 - x, rana.y * 2 - y) < 24) salta(tAdesso);
+  if (!suAcqua(x, y)) return;      // su una ninfea o fra le canne: niente onde, niente acqua
+  cerchio(x, y, false); bagna('tocco', trascina ? .35 : .6, x);   // trascinando, i pezzi si accavallano: più piano
+  const gy = Math.max(ZT + 30, Math.min(ZB - 30, y));
+  koi.forEach(f => { if (Math.hypot(f.x - x, f.y - y) < 160) f.meta = { x, y: gy, fino: ora + 5000 }; });
+}
+cv.addEventListener('pointerdown', e => { giu = true; tocca(e, false); });
+cv.addEventListener('pointermove', e => { if (giu) tocca(e, true); });
+addEventListener('pointerup', () => giu = false);
+
+let prossimaFoglia = 2000, prossimoVerso = 8000, prossimoCanto = 5000, prec = 0;
+
+function frame(t) {
+  tAdesso = t; const k = prec ? Math.min(3, (t - prec) / 16.7) : 1; prec = t;
+  acquaDisegna(t);
+  koi.forEach(f => nuota(f, t, k)); koi.forEach(f => koiDisegna(f, t, true));
+  for (let i = foglie.length - 1; i >= 0; i--) if (!foglia(foglie[i], t, k) || foglie[i].x < -8 || foglie[i].x > FW + 8) foglie.splice(i, 1);
+  koi.forEach(f => koiDisegna(f, t, false));
+  if (t > prossimaFoglia) { prossimaFoglia = t + (AUTUNNO ? 2500 + Math.random() * 4500 : 7000 + Math.random() * 9000); if (foglie.length < 10) foglie.push(nuovaFoglia()); }
+  cerchi = cerchi.filter(cerchioDisegna);
+  ranaDisegna(t); libellulaDisegna(t);
+  colora(); notte(t);
+  cx.putImageData(img, 0, 0);
+  // gli uccellini coprivano grilli e rane: la rana più spesso e più forte, i grilli più fitti,
+  // gli uccellini più radi e più piano
+  // (i gracidii singoli sono spenti: ora gracida il coro delle raganelle, in fondo())
+  // if (t > prossimoVerso) { prossimoVerso = t + 5000 + Math.random() * 9000; gracida(); }
+  if (Math.random() < (giorno < .5 ? .006 : .004)) grillo();   // i grilli anche di giorno, appena più radi
+  // un uccellino ogni 12-32 s. Non più i canti della palude: il loro trillo partiva e si fermava di
+  // colpo e sembrava una libellula che passa
+  if (t > prossimoCanto) { prossimoCanto = t + 20000 + Math.random() * 25000; canta(); }
+  requestAnimationFrame(frame);
+}
+audio();
+caricaFondale(FONDALE, FW, FH, 40, { r: 150, rb: 40 }).then(px => { leggi(px); requestAnimationFrame(frame); });
+</script>
+</body>
+</html>

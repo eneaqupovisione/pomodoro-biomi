@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Pioggia</title>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0f14; cursor: pointer; user-select: none; -webkit-user-select: none; }
+  canvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; touch-action: none; }
+  .fascia { position: fixed; left: 0; right: 0; height: 16.6vh; display: flex; align-items: center; justify-content: center;
+            font-family: Silkscreen, Menlo, monospace; pointer-events: none; text-align: center; text-shadow: 0 0 12px #000; }
+  #timer { top: 0; font-size: min(9vh, 64px); letter-spacing: .08em; color: #dde4ea; }
+  #invito { bottom: 0; font-size: min(2.6vh, 20px); color: #b4c0ca; transition: opacity .8s; padding: 0 5vw; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="timer" class="fascia">5:00</div>
+<div id="invito" class="fascia">cerca la cosa più lontana che vedi</div>
+<script src="../musica/brani.js"></script>
+<script src="pausa.js"></script>
+<script src="fondali/pioggia.js"></script>
+<script src="suoni/pioggia.js"></script>
+<script>
+// La pioggia sul vetro. Il fondale è di Gemini (fondali/pioggia-gemini.jpg, dal
+// riferimento in pixel art): una città sotto le nuvole, sfocata.
+// Sopra, il codice: il vetro appannato, le gocce che si posano, crescono, si
+// uniscono e scivolano lasciando la scia; le finestre che si accendono e si
+// spengono; un lampo lontano ogni tanto. Col dito si pulisce il vetro, e il
+// vapore torna piano.
+
+// ---------- La tela, come il giardino ----------
+const ASPETTO = innerWidth > 0 && innerHeight > 0 ? Math.min(3, Math.max(.4, innerWidth / innerHeight)) : 1.6;
+const FH = 228, FW = 2 * Math.round(114 * ASPETTO), N = FW * FH;
+const ZT = 38, ZB = FH - 38;
+const cv = document.getElementById('c'); cv.width = FW; cv.height = FH;
+const cx = cv.getContext('2d'), img = cx.createImageData(FW, FH), d = img.data;
+let seme = 11; const rnd = () => { seme = (seme * 1664525 + 1013904223) >>> 0; return seme / 4294967296; };
+function mix(x, y, c, a) { x = Math.round(x); y = Math.round(y); if (x < 0 || y < 0 || x >= FW || y >= FH) return; const i = (y * FW + x) * 4; d[i] += (c[0] - d[i]) * a; d[i + 1] += (c[1] - d[i + 1]) * a; d[i + 2] += (c[2] - d[i + 2]) * a; }
+
+// ---------- Leggere il fondale: il cielo, le finestre accese ----------
+let base = null, vapore = [150, 162, 172];
+const cielo = new Uint8Array(N), finestre = new Map();     // cella 2×2 → { pixel, accesa, spenta: colore da spenta }
+function leggi(px) {
+  base = px;
+  let sv = [0, 0, 0, 0];
+  for (let i = 0; i < N; i++) {
+    const r = px[i * 3], g = px[i * 3 + 1], b = px[i * 3 + 2], x = i % FW, y = (i - x) / FW;
+    if (b >= r && y < FH * .62 && r + g + b > 150) { cielo[i] = 1; sv[0] += r; sv[1] += g; sv[2] += b; sv[3]++; }
+  }
+  // le finestre: dentro i palazzi, un pixel caldo più chiaro di quelli intorno
+  const lum = new Float32Array(N); for (let i = 0; i < N; i++) lum[i] = px[i * 3] + px[i * 3 + 1] + px[i * 3 + 2];
+  for (let y = Math.round(FH * .3); y < FH - 3; y++) for (let x = 3; x < FW - 3; x++) {
+    const i = y * FW + x; if (cielo[i] || px[i * 3] < px[i * 3 + 2] + 4 || lum[i] < 120) continue;
+    let m = 0; for (let v = -3; v <= 3; v++) for (let u = -3; u <= 3; u++) m += lum[i + v * FW + u];
+    if (lum[i] > m / 49 * 1.12) {
+      const k = (x >> 1) + ',' + (y >> 1); let f = finestre.get(k);
+      if (!f) finestre.set(k, f = { pixel: [], accesa: rnd() < .7 });
+      f.pixel.push(i);
+    }
+  }
+  if (sv[3]) vapore = [sv[0] / sv[3] + 30, sv[1] / sv[3] + 30, sv[2] / sv[3] + 30];
+  // da spenta, una finestra prende il colore del muro sotto di lei
+  for (const f of finestre.values()) { const j = Math.min(N - 1, f.pixel[0] + 2 * FW); f.muro = [px[j * 3] * .8, px[j * 3 + 1] * .8, px[j * 3 + 2] * .8]; }
+  for (let y = 0; y < FH; y++) {
+    const q = 1 - .55 * Math.max(1 - sm(0, ZT + 10, y), sm(FH - ZT - 10, FH, y));
+    for (let x = 0; x < FW; x++) { const i = (y * FW + x) * 3; px[i] *= q; px[i + 1] *= q; px[i + 2] *= q; }
+  }
+}
+const elenco = () => [...finestre.values()];
+function finestreCambiano(t) {  // qualcuno accende o spegne la luce; di notte se ne accendono di più
+  const fs = elenco(); if (!fs.length) return;
+  const f = fs[Math.floor(rnd() * fs.length)], accese = fs.filter(f => f.accesa).length / fs.length, tetto = .45 + .35 * (1 - giorno);
+  const nuova = f.accesa ? accese < tetto * .8 : accese < tetto || rnd() < .3;
+  if (nuova !== f.accesa) { f.accesa = nuova; f.t = t; f.neon = rnd() < .5; }
+}
+// quanto è accesa una finestra adesso: si spegne di colpo, si accende piano o, se è un neon, a scatti
+function accensione(f, t) {
+  const q = (t - (f.t || -1e5)) / 500;
+  if (!f.accesa) return q < .3 ? 1 - q / .3 : 0;
+  if (q >= 1) return 1;
+  return f.neon ? (q < .2 ? 1 : q < .35 ? 0 : q < .45 ? .8 : q < .6 ? .1 : 1) * (q > .6 ? 1 : .9) : q;
+}
+
+// ---------- Il vetro: il vapore e le gocce ----------
+const nebbia = new Float32Array(N).fill(.5);
+const NEBBIA = .5;
+const gocce = [];                 // { x, y, r, vy, scende, scia }
+function goccia(x, y, r) { gocce.push({ x, y, r, vy: 0, scende: false, ondeggia: rnd() * 6, scia: 0 }); }
+for (let k = 0; k < 260; k++) goccia(rnd() * FW, rnd() * FH, .5 + rnd() * rnd() * 3.2);
+function gocceMuovi(t, k) {
+  // piove: nuove goccioline, più fitte quando la pioggia si fa forte
+  for (let n = 0; n < (1 + pioggiaForte * 2) * k; n++) if (rnd() < .3) goccia(rnd() * FW, rnd() * FH, .5 + rnd() * rnd() * 1.8);
+  for (const g of gocce) {
+    if (!g.scende && g.r > 2.4 && rnd() < .004 * k) g.scende = true;
+    if (g.scende) {
+      g.vy = Math.min(.9, g.vy + .006 * k * g.r); g.y += g.vy * k; g.x += Math.sin(t * .004 + g.ondeggia) * .06 * k;
+      g.r -= .0025 * k;           // perde acqua lungo la scia
+      g.scia += g.vy * k; if (g.scia > 3 + rnd() * 6) { g.scia = 0; goccia(g.x + (rnd() - .5), g.y - g.r - 1, .4 + rnd() * .5); }
+      if (g.r < 1.4) { g.scende = false; g.vy = 0; }
+    }
+  }
+  // chi tocca un'altra se la beve
+  gocce.sort((a, b) => a.y - b.y);
+  for (let a = 0; a < gocce.length; a++) {
+    const A = gocce[a]; if (!A.scende || A.morta) continue;
+    for (let b = a + 1; b < gocce.length && gocce[b].y < A.y + A.r + 3; b++) {
+      const B = gocce[b]; if (B.morta || B === A) continue;
+      if (Math.abs(B.x - A.x) < A.r + B.r && Math.abs(B.y - A.y) < A.r + B.r) { A.r = Math.min(4.2, Math.sqrt(A.r * A.r + B.r * B.r)); B.morta = true; }
+    }
+  }
+  for (let a = gocce.length - 1; a >= 0; a--) { const g = gocce[a]; if (g.morta || g.y > FH + 6) gocce.splice(a, 1); }
+  // le piccole e ferme si uniscono a caso, così ne crescono di grosse
+  if (gocce.length > 420) gocce.splice(0, gocce.length - 420);
+  for (let n = 0; n < 3 * k; n++) { const g = gocce[Math.floor(rnd() * gocce.length)]; if (g && !g.scende && g.r < 3.6) g.r += .05; }
+}
+function goccaDisegna(g) {
+  // una lente: dentro si vede la città capovolta e schiacciata, il bordo in basso è scuro, il lampo di luce in alto
+  const r = g.r, ry = r * (g.scende ? 1.25 : 1);
+  if (r < 1.6) { mix(g.x, g.y, [225, 232, 238], .12 + r * .12); return; }   // le goccioline: un punto di luce, niente di più
+  for (let y = -Math.ceil(ry); y <= Math.ceil(ry); y++) for (let x = -Math.ceil(r); x <= Math.ceil(r); x++) {
+    const dd = Math.hypot(x / r, y / ry); if (dd > 1) continue;
+    const X = Math.round(g.x + x), Y = Math.round(g.y + y); if (X < 0 || Y < 0 || X >= FW || Y >= FH) continue;
+    // capovolta: in basso si vede quello che sta sopra, cioè il cielo
+    const sx = Math.max(0, Math.min(FW - 1, Math.round(g.x - x * 2))), sy = Math.max(ZT, Math.min(FH - 1, Math.round(g.y - ry * 5 - y * 2.4)));
+    const s = (sy * FW + sx) * 3, j = (Y * FW + X) * 4, ombra = dd > .7 && y > 0 ? .7 : 1, chiaro = dd < .6 ? 1.35 : 1.15;
+    const R = base[s] * chiaro * ombra, G = base[s + 1] * chiaro * ombra, B = base[s + 2] * chiaro * ombra;
+    d[j] += (R - d[j]) * .85; d[j + 1] += (G - d[j + 1]) * .85; d[j + 2] += (B - d[j + 2]) * .85;
+  }
+  mix(g.x - r * .35, g.y - ry * .45, [245, 250, 255], .75); if (r > 2.6) mix(g.x - r * .35 + 1, g.y - ry * .45, [245, 250, 255], .35);
+  if (g.scende) for (let y = 1; y < 8; y++) { const i = Math.round(g.y - ry - y) * FW + Math.round(g.x); if (i >= 0 && i < N) nebbia[i] = Math.min(nebbia[i], .2 + y * .03); }
+}
+
+// ---------- Il lampo, lontano ----------
+let lampo = -1e5, prossimoLampo = 40000 + Math.random() * 40000;
+function lampoLuce(t) { const q = (t - lampo) / 600; if (q < 0 || q > 1) return 0; return (q < .15 ? 1 : q < .3 ? .3 : q < .42 ? .8 : 1 - q) * .9; }
+
+// ---------- I suoni: registrati (suoni/LEGGIMI.md), tranne l'aereo ----------
+// La pioggia fatta col codice sembrava di cartone: ora è una registrazione vera di
+// pioggia contro una finestra, in loop. Il dito sul vetro bagnato e il tuono, anche.
+let pioggiaG = null, vetroBuf = null, tuonoBuf = null, vetroFino = 0, granoBuf = null, pioggiaForte = .3;
+// gli stridii del dito, nella registrazione: [inizio, durata] in secondi
+const STRIDII = [[0.20,0.40],[0.95,0.25],[1.55,0.30],[2.20,0.25],[2.75,0.35],[3.50,0.25],[4.40,0.30],[4.95,0.25],[5.55,0.35],[6.20,0.25],[6.55,0.30],[7.20,0.30],[8.25,0.35],[8.65,0.25],[10.20,0.25],[11.00,0.45],[11.75,0.40],[12.35,0.30],[13.35,1.20],[15.50,0.25],[18.60,0.30],[19.25,0.30],[19.60,0.80],[20.55,1.05],[21.75,0.30],[23.05,0.30],[25.15,0.70],[27.25,0.45],[27.75,0.45],[28.70,1.20],[35.75,0.55],[36.55,0.80],[37.90,1.05],[39.40,0.45],[40.15,0.30],[43.10,1.00],[44.85,0.40]];
+fondo = () => {
+  pioggiaG = AC.createGain(); pioggiaG.gain.value = .0001; pioggiaG.connect(master);
+  suono('pioggia').then(b => { const s = ciclo(b, 2); s.connect(pioggiaG); s.start(); pioggiaG.gain.setTargetAtTime(.8, AC.currentTime, 1.2); }).catch(() => {});
+  suono('vetro').then(b => vetroBuf = b).catch(() => {});
+  suono('tuono').then(b => tuonoBuf = b).catch(() => {});
+};
+function stride(vel, x) {      // il dito sul vetro bagnato: uno stridio vero, uno dopo l'altro mentre si muove
+  if (!vetroBuf || AC.currentTime < vetroFino || vel < .02) return;
+  const [s, dur] = STRIDII[Math.floor(Math.random() * STRIDII.length)];
+  colpo(vetroBuf, s, dur, Math.min(1.2, .35 + vel * 2.5), (x / FW - .5) * 1.2);
+  vetroFino = AC.currentTime + dur * .85;
+}
+function motore() {            // un aereo lontano: un soffio basso che arriva e se ne va in venti secondi
+  if (!AC) return; const t = AC.currentTime, s = rumore(4, .05), lp = AC.createBiquadFilter(), hp = AC.createBiquadFilter(), g = AC.createGain();
+  lp.type = 'lowpass'; lp.frequency.value = 420; hp.type = 'highpass'; hp.frequency.value = 120;
+  g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(.018, t + 8); g.gain.linearRampToValueAtTime(.0001, t + 20);
+  s.connect(hp); hp.connect(lp); lp.connect(g); g.connect(master); s.start(t); s.stop(t + 20.5);
+}
+function tuono() {             // lontano: la registrazione; se manca, un brontolio fatto qui
+  if (!AC) return; if (tuonoBuf) { colpo(tuonoBuf, 0, tuonoBuf.duration - .2, .9); return; } const t = AC.currentTime, s = rumore(6, .015), lp = AC.createBiquadFilter(), g = AC.createGain();
+  lp.type = 'lowpass'; lp.frequency.setValueAtTime(260, t); lp.frequency.linearRampToValueAtTime(120, t + 5);
+  g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(.11, t + .6); g.gain.linearRampToValueAtTime(.07, t + 1.6); g.gain.exponentialRampToValueAtTime(.0001, t + 6);
+  s.connect(lp); lp.connect(g); g.connect(master); s.start(t); s.stop(t + 6.2);
+}
+
+// ---------- La luce ----------
+function colora(l) {
+  const r0 = .36 + .64 * giorno, g0 = .44 + .56 * giorno, b0 = .72 + .28 * giorno, caldo = tramonto * 18, blu = (1 - giorno) * 8;
+  for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+    const fl = cielo[p] ? l * 70 : l * 14;
+    d[i] = d[i] * r0 + caldo + fl; d[i + 1] = d[i + 1] * g0 + caldo * .25 + fl; d[i + 2] = d[i + 2] * b0 + blu - caldo * .3 + fl * 1.1;
+  }
+}
+function luciCitta(t) {        // le finestre non si tingono: di notte restano accese, e sono di più
+  const n = 1 - giorno;
+  for (const f of finestre.values()) { const e = accensione(f, t); for (const i of f.pixel) {
+    const j = i * 4, x = i % FW, y = (i - x) / FW;
+    if (e > 0) {
+      const q = 1 + .9 * n, R = Math.min(255, base[i * 3] * q * 1.2 + 30 * n), G = Math.min(255, base[i * 3 + 1] * q * 1.05 + 18 * n), B = base[i * 3 + 2] * q * .7;
+      const sp = [f.muro[0] * (.4 + .6 * giorno), f.muro[1] * (.4 + .6 * giorno), f.muro[2] * (.5 + .5 * giorno)];
+      d[j] = sp[0] + (R - sp[0]) * e; d[j + 1] = sp[1] + (G - sp[1]) * e; d[j + 2] = sp[2] + (B - sp[2]) * e;
+      if (n > .2) { const a = .14 * n * (.4 + nebbia[i]) * e; for (const [u, v] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-2, 0], [2, 0], [0, 2]]) mix(x + u, y + v, [R, G, B], u * u + v * v > 1 ? a * .5 : a); }
+    }
+    else { d[j] = f.muro[0] * (.4 + .6 * giorno); d[j + 1] = f.muro[1] * (.4 + .6 * giorno); d[j + 2] = f.muro[2] * (.5 + .5 * giorno); }
+  } }
+}
+
+// ---------- Gli aerei: di notte due luci, una fissa e una rossa che lampeggia; di giorno una sagoma ----------
+let aereo = null, prossimoAereo = 15000 + Math.random() * 20000;
+function aereoDisegna(t) {
+  if (!aereo) {
+    if (t < prossimoAereo) return;
+    const verso = rnd() < .5 ? 1 : -1, y = ZT + 8 + rnd() * (FH * .4 - ZT);
+    aereo = { x: verso > 0 ? -6 : FW + 6, y, verso, v: .012 + rnd() * .01, sale: (rnd() - .5) * .002, t0: t };
+    prossimoAereo = t + 45000 + rnd() * 50000; motore();
+  }
+  const A = aereo, dt = t - A.t0, x = A.x + A.verso * A.v * dt, y = A.y + A.sale * dt;
+  if (x < -10 || x > FW + 10) { aereo = null; return; }
+  const n = 1 - giorno, i = Math.round(y) * FW + Math.round(x), dietro = i >= 0 && i < N && cielo[i] ? 1 : .6;   // fra le nuvole si vede meno
+  if (n > .3) {
+    mix(x, y, [255, 250, 235], .9 * n * dietro);
+    if (dt % 1100 < 120) { mix(x - A.verso * 2, y, [255, 70, 60], n * dietro); mix(x - A.verso * 2, y - 1, [255, 70, 60], .4 * n * dietro); }
+    if (dt % 1700 < 80) mix(x + A.verso, y + 1, [255, 255, 255], .8 * n * dietro);
+  } else for (let u = -2; u <= 2; u++) mix(x + u, y, [40, 46, 54], .5 * dietro * (1 - n));
+}
+
+// ---------- Il tocco: il dito pulisce il vetro ----------
+let giu = false, ultimo = null;
+function punto(e) { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * FW, (e.clientY - r.top) / r.height * FH]; }
+function pulisci(x0, y0, x1, y1) {
+  const l = Math.max(.1, Math.hypot(x1 - x0, y1 - y0));
+  for (let s = 0; s <= l; s += 1) {
+    const X = x0 + (x1 - x0) * s / l, Y = y0 + (y1 - y0) * s / l;
+    for (let y = -6; y <= 6; y++) for (let x = -6; x <= 6; x++) {
+      const dd = Math.hypot(x, y) / 6.5; if (dd > 1) continue; const px = Math.round(X + x), py = Math.round(Y + y);
+      if (px >= 0 && py >= 0 && px < FW && py < FH) nebbia[py * FW + px] = Math.min(nebbia[py * FW + px], dd * dd * .4);
+    }
+    for (const g of gocce) if (Math.hypot(g.x - X, g.y - Y) < 6) g.morta = true;
+    // dal bordo della strisciata cola qualche goccia
+    if (rnd() < .08) goccia(X + (rnd() - .5) * 12, Y + 6, 1.8 + rnd() * 1.2);
+  }
+}
+cv.addEventListener('pointerdown', e => {
+  audio(); if (AC && AC.state === 'suspended' && !document.hidden) AC.resume();
+  giu = true; const [x, y] = punto(e); ultimo = [x, y, performance.now()]; pulisci(x, y, x, y);
+});
+cv.addEventListener('pointermove', e => {
+  if (!giu || !ultimo) return; const [x, y] = punto(e), ora = performance.now();
+  pulisci(ultimo[0], ultimo[1], x, y);
+  const vel = Math.hypot(x - ultimo[0], y - ultimo[1]) / Math.max(8, ora - ultimo[2]);
+  if (AC) stride(vel, x);
+  ultimo = [x, y, ora];
+});
+addEventListener('pointerup', () => { giu = false; ultimo = null; });
+
+// ---------- Il giro ----------
+let prec = 0, prossimaFinestra = 4000;
+function frame(t) {
+  const k = prec ? Math.min(3, Math.max(0, (t - prec) / 16.7)) : 1; prec = t;
+  pioggiaForte = Math.max(0, .45 + .35 * Math.sin(t * .00009) * Math.sin(t * .00023 + 1));
+  if (pioggiaG && Math.floor(t / 500) !== Math.floor((t - 16.7 * k) / 500)) pioggiaG.gain.setTargetAtTime(.55 + pioggiaForte * .5, AC.currentTime, 2);
+  // il vapore torna piano dove il dito ha pulito
+  const torna = 1 - Math.pow(1 - .0009, k);
+  const l = lampoLuce(t);
+  for (let i = 0, j = 0; i < N; i++, j += 4) {
+    let r = base[i * 3], g = base[i * 3 + 1], b = base[i * 3 + 2], q = nebbia[i];
+    nebbia[i] += (NEBBIA - q) * torna;
+    const a = q * .55; r += (vapore[0] - r) * a; g += (vapore[1] - g) * a; b += (vapore[2] - b) * a;
+    d[j] = r; d[j + 1] = g; d[j + 2] = b; d[j + 3] = 255;
+  }
+  gocceMuovi(t, k);
+  for (const g of gocce) goccaDisegna(g);
+  colora(l);
+  luciCitta(t);
+  aereoDisegna(t);
+  cx.putImageData(img, 0, 0);
+  if (t > prossimaFinestra) { prossimaFinestra = t + 900 + Math.random() * 2200; finestreCambiano(t); }
+  if (t > prossimoLampo) { prossimoLampo = t + 70000 + Math.random() * 60000; lampo = t; setTimeout(tuono, 1500 + Math.random() * 3500); }
+  requestAnimationFrame(frame);
+}
+audio();
+caricaFondale(FONDALE, FW, FH, 40, { r: 95, rb: 24 }).then(px => { leggi(px); requestAnimationFrame(frame); });
+</script>
+</body>
+</html>

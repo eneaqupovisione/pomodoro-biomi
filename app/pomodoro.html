@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pomodoro</title>
+<!--
+  La finestra del Pomodoro: la apre Pomodoro.app (doppio clic sull'app, o
+  «Apri il Pomodoro» nel menu in alto). L'app chiama stato({...}) ogni due secondi
+  e riceve i cambi con window.webkit.messageHandlers.pomodoro.postMessage(...):
+  scrive lei impostazioni.json. Nel browser, ?finto mostra dati di prova.
+-->
+<style>
+  :root {
+    --fondo: #081a1c; --carta: #0c2427; --bordo: #17383c; --bordo-forte: #24525a;
+    --testo: #cfe0d4; --spento: #83a293; --fioco: #4f6e66;
+    --koi: #e8763a; --koi-chiaro: #f3a06f; --foglia: #8fc9a0; --loto: #e6a3b8; --acqua: #6fb3c4;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--fondo); color: var(--testo);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; -webkit-font-smoothing: antialiased; }
+  body { padding: 8px 28px 32px; user-select: none; -webkit-user-select: none; cursor: default; }
+  main { max-width: 760px; margin: 0 auto; display: grid; gap: 18px; }
+
+  header { display: grid; gap: 10px; padding: 4px 2px 6px; }
+  .titolo { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+  h1 { margin: 0; font-size: 26px; font-weight: 650; letter-spacing: .01em; }
+  #dove { color: var(--spento); font-size: 14px; text-align: right; }
+  #dove b { color: var(--testo); font-weight: 600; font-family: var(--mono); }
+  #barra { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; height: 12px; }
+  #barra i { background: var(--bordo); }
+  #barra i.pieno { background: var(--koi); }
+  #barra.pausa i.pieno { background: var(--acqua); }
+  #nota { color: var(--fioco); font-size: 12.5px; }
+  .riga-nota { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  #interruttore { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--spento); }
+  #interruttore button { padding: 5px 10px; font-size: 13px; }
+  #interruttore b { color: var(--koi-chiaro); }
+  body.spento main > section { opacity: .45; }
+
+  section { background: var(--carta); border: 2px solid var(--bordo); padding: 18px 20px 20px; }
+  h2 { margin: 0 0 14px; font-size: 12px; font-weight: 650; letter-spacing: .14em; text-transform: uppercase; color: var(--spento); }
+
+  /* I tempi */
+  .tempi { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .tempo { border: 2px solid var(--bordo); padding: 12px 14px; display: grid; gap: 6px; }
+  .tempo span { color: var(--spento); font-size: 13px; }
+  .regola { display: flex; align-items: center; gap: 10px; }
+  .regola button { width: 34px; height: 34px; font: 600 18px var(--mono); }
+  .regola output { flex: 1; text-align: center; font: 600 40px/1 var(--mono); letter-spacing: -.02em; }
+  .regola output small { font-size: 14px; color: var(--spento); margin-left: 4px; letter-spacing: 0; }
+  .per { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .scelta { display: inline-flex; border: 2px solid var(--bordo); }
+  .scelta button { border: 0; padding: 8px 14px; background: none; color: var(--spento); }
+  .scelta button[aria-pressed="true"] { background: var(--bordo-forte); color: var(--testo); }
+  #salva { margin-left: auto; padding: 9px 18px; background: var(--koi); border-color: var(--koi); color: #1b0d05; font-weight: 650; }
+  #salva:disabled { background: none; border-color: var(--bordo); color: var(--fioco); }
+  #regolaOggi { margin: 12px 0 0; font-size: 13.5px; color: var(--spento); min-height: 1.4em; }
+  #regolaOggi a { color: var(--koi-chiaro); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+
+  button { font: inherit; color: var(--testo); background: var(--fondo); border: 2px solid var(--bordo-forte); cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--spento); }
+  button:focus-visible, select:focus-visible, .bioma:focus-visible { outline: 2px solid var(--koi-chiaro); outline-offset: 2px; }
+
+  /* I biomi */
+  #biomi { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+  .carta-bioma { border: 2px solid var(--bordo); display: grid; }
+  .carta-bioma:has(.bioma[aria-pressed="true"]) { border-color: var(--koi); }
+  .bioma { border: 0; background: var(--fondo); padding: 0; text-align: left; display: grid; }
+  .prova { border: 0; border-top: 1px solid var(--bordo); background: var(--fondo); padding: 7px 12px; text-align: left;
+    font-size: 13px; color: var(--fioco); }
+  .prova:hover:not(:disabled) { color: var(--koi-chiaro); }
+  .prova:disabled { cursor: default; }
+  .anteprima { aspect-ratio: 16 / 10; overflow: hidden; position: relative; background: #05110f; }
+  .anteprima iframe { position: absolute; top: 0; left: 0; width: 1280px; height: 800px; border: 0;
+    transform-origin: 0 0; pointer-events: none; }
+  .nome { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; font-weight: 600; }
+  .nome em { font-style: normal; font-size: 12px; color: var(--koi-chiaro); font-weight: 600; letter-spacing: .06em; }
+  #altri { margin: 12px 0 0; color: var(--fioco); font-size: 13px; }
+
+  /* La giornata */
+  .righe { display: grid; gap: 0; }
+  .riga { display: grid; grid-template-columns: 110px 1fr auto; gap: 14px; align-items: center; padding: 11px 0; border-top: 1px solid var(--bordo); }
+  .riga:first-child { border-top: 0; padding-top: 2px; }
+  .riga > span:first-child { color: var(--spento); }
+  .valore { display: flex; align-items: center; gap: 10px; }
+  .fioco { color: var(--fioco); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="titolo">
+      <h1>Pomodoro</h1>
+      <div id="dove">…</div>
+    </div>
+    <div id="barra" aria-hidden="true"></div>
+    <div class="riga-nota">
+      <div id="nota">Conta solo il tempo con Claude davanti e le mani sul Mac.</div>
+      <div id="interruttore"></div>
+    </div>
+  </header>
+
+  <section aria-labelledby="t-tempi">
+    <h2 id="t-tempi">I tempi</h2>
+    <div class="tempi">
+      <div class="tempo">
+        <span>lavoro</span>
+        <div class="regola">
+          <button data-campo="lavoro" data-passo="-5" aria-label="cinque minuti di lavoro in meno">−</button>
+          <output id="lavoro">45<small>min</small></output>
+          <button data-campo="lavoro" data-passo="5" aria-label="cinque minuti di lavoro in più">+</button>
+        </div>
+      </div>
+      <div class="tempo">
+        <span>pausa</span>
+        <div class="regola">
+          <button data-campo="pausa" data-passo="-1" aria-label="un minuto di pausa in meno">−</button>
+          <output id="pausa">5<small>min</small></output>
+          <button data-campo="pausa" data-passo="1" aria-label="un minuto di pausa in più">+</button>
+        </div>
+      </div>
+    </div>
+    <div class="per">
+      <div class="scelta" role="group" aria-label="per quanto vale">
+        <button data-per="oggi" aria-pressed="false">solo oggi</button>
+        <button data-per="sempre" aria-pressed="true">da adesso in poi</button>
+      </div>
+      <button id="salva" disabled>Va bene</button>
+    </div>
+    <p id="regolaOggi"></p>
+  </section>
+
+  <section aria-labelledby="t-biomi">
+    <h2 id="t-biomi">Il bioma della pausa</h2>
+    <div id="biomi"></div>
+    <p id="altri">Gli altri biomi arrivano qui da soli, appena ci sono.</p>
+  </section>
+
+  <section aria-labelledby="t-oggi">
+    <h2 id="t-oggi">La giornata</h2>
+    <div class="righe">
+      <div class="riga"><span>pomodori</span><div class="valore" id="pomodori"></div><span></span></div>
+      <div class="riga"><span>uscite</span><div class="valore" id="uscite"></div><span class="fioco">dieci tocchi di fila</span></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+let manda = m => window.webkit?.messageHandlers?.pomodoro?.postMessage(m);
+let S = null;                                   // l'ultimo stato mandato dall'app
+let bozza = null, toccata = false;              // i tempi che stai scegliendo
+let biomiVisti = '';
+
+const fmt = s => { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const nomeBioma = n => n.replace(/[-_]/g, ' ').replace(/^./, c => c.toUpperCase());
+
+function stato(s) {
+  S = s;
+  const oggiFile = s.file.oggi && s.file.oggi.data === s.oggi ? s.file.oggi : null;
+  if (!toccata) bozza = { lavoro: Math.round(s.lavoro_minuti), pausa: Math.round(s.pausa_minuti), per: oggiFile ? 'oggi' : 'sempre' };
+  disegnaInterruttore(); disegnaConto(); disegnaTempi(oggiFile); disegnaBiomi(); disegnaOggi();
+}
+
+function disegnaInterruttore() {
+  const spento = S.spento_fino > 0;
+  document.body.classList.toggle('spento', spento);
+  const alle = spento ? new Date(S.spento_fino * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
+  const html = spento
+    ? `<b>spento</b> fino alle ${alle === '00:00' ? 'mezzanotte' : alle} <button data-accendi>Riaccendi</button>`
+    : `spegni <button data-spegni="60">per un'ora</button><button data-spegni="oggi">fino a stasera</button>`;
+  if ($('#interruttore').innerHTML !== html) $('#interruttore').innerHTML = html;
+}
+$('#interruttore').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.hasAttribute('data-accendi')) manda({ tipo: 'accendi' });
+  else manda({ tipo: 'spegni', minuti: b.dataset.spegni === 'oggi' ? null : +b.dataset.spegni });
+});
+
+function disegnaConto() {
+  if (S.spento_fino > 0) {
+    $('#dove').innerHTML = 'spento: non conta e non ferma';
+    [...$('#barra').children].forEach(q => q.classList.remove('pieno'));
+    return;
+  }
+  const inPausa = S.pausa_fino > 0, barra = $('#barra');
+  const minuti = Math.max(1, Math.round(inPausa ? S.pausa_durata_minuti : S.lavoro_minuti));
+  const pieni = inPausa ? minuti - Math.ceil((S.pausa_fino - S.ora) / 60) : Math.floor(S.lavoro_secondi / 60);
+  if (barra.children.length !== minuti) barra.innerHTML = '<i></i>'.repeat(minuti);
+  [...barra.children].forEach((q, i) => q.classList.toggle('pieno', i < pieni));
+  barra.classList.toggle('pausa', inPausa);
+  $('#dove').innerHTML = inPausa
+    ? `in pausa · finisce tra <b>${fmt(S.pausa_fino - S.ora)}</b>`
+    : `al lavoro · la pausa tra <b>${Math.max(1, Math.ceil(S.resta_secondi / 60))}'</b>`;
+}
+
+function disegnaTempi(oggiFile) {
+  $('#lavoro').firstChild.textContent = bozza.lavoro;
+  $('#pausa').firstChild.textContent = bozza.pausa;
+  document.querySelectorAll('[data-per]').forEach(b => b.setAttribute('aria-pressed', b.dataset.per === bozza.per));
+  const sempre = `${S.file.lavoro_minuti || 45} + ${S.file.pausa_minuti || 5}`;
+  const cambiato = bozza.lavoro !== Math.round(S.lavoro_minuti) || bozza.pausa !== Math.round(S.pausa_minuti)
+                   || (bozza.per === 'oggi') !== !!oggiFile;
+  $('#salva').disabled = !cambiato;
+  $('#regolaOggi').innerHTML = oggiFile
+    ? `Oggi vale ${oggiFile.lavoro_minuti} + ${oggiFile.pausa_minuti}; da domani torna ${sempre}. <a id="togli">Torna a ${sempre} adesso</a>`
+    : `Vale ${sempre} ogni giorno, finché non lo cambi.`;
+  $('#togli')?.addEventListener('click', () => { toccata = false; manda({ tipo: 'togli_oggi' }); });
+}
+
+function disegnaBiomi() {
+  const chiave = S.biomi.join(',');
+  if (chiave !== biomiVisti) {
+    biomiVisti = chiave;
+    const extra = new URLSearchParams(S.giornata).toString();
+    $('#biomi').innerHTML = S.biomi.map(n => `
+      <div class="carta-bioma">
+        <button class="bioma" data-bioma="${n}" aria-pressed="false">
+          <div class="anteprima"><iframe tabindex="-1" loading="lazy"
+            src="../scene/${encodeURIComponent(n)}.html?suono=0&fine=${Date.now() + S.pausa_minuti * 60000}&${extra}"></iframe></div>
+          <div class="nome">${nomeBioma(n)}<em></em></div>
+        </button>
+        <button class="prova" data-prova="${n}">Provalo · 20 secondi</button>
+      </div>`).join('');
+    scala();
+    $('#altri').hidden = S.biomi.length > 1;
+  }
+  document.querySelectorAll('.bioma').forEach(b => {
+    const scelto = b.dataset.bioma === S.bioma;
+    b.setAttribute('aria-pressed', scelto);
+    b.querySelector('em').textContent = scelto ? 'SCELTO' : '';
+  });
+  // La prova: sopra Claude, come la pausa vera; non tocca il conto né segna uscite
+  document.querySelectorAll('.prova').forEach(b => {
+    b.disabled = !!S.in_prova || S.pausa_fino > 0;
+    b.textContent = S.in_prova === b.dataset.prova ? 'In prova, sopra Claude…' : 'Provalo · 20 secondi';
+    b.title = S.pausa_fino > 0 ? 'Sei già in pausa' : 'Copre Claude per 20 secondi; dieci tocchi per uscire prima';
+  });
+}
+
+function scala() {
+  document.querySelectorAll('.anteprima').forEach(a => a.querySelector('iframe').style.transform = `scale(${a.clientWidth / 1280})`);
+}
+new ResizeObserver(scala).observe(document.body);
+
+// La giornata: le pause cominciate oggi e quelle tolte prima coi dieci tocchi
+function disegnaOggi() {
+  $('#pomodori').innerHTML = `<b>${S.pause_oggi}</b>&nbsp;pause fatte oggi`;
+  $('#uscite').textContent = `oggi ${S.uscite.oggi} · questa settimana ${S.uscite.settimana}`;
+}
+
+// I gesti
+document.querySelectorAll('[data-campo]').forEach(b => b.addEventListener('click', () => {
+  const campo = b.dataset.campo, passo = +b.dataset.passo;
+  const [min, max] = campo === 'lavoro' ? [5, 240] : [1, 60];
+  let v = bozza[campo] + passo;
+  if (campo === 'lavoro' && passo > 0 && v % 5) v -= v % 5;       // da 42 a 45, non a 47
+  if (campo === 'lavoro' && passo < 0 && bozza[campo] % 5) v = bozza[campo] - bozza[campo] % 5;
+  bozza[campo] = Math.min(max, Math.max(min, v));
+  toccata = true; stato(S);
+}));
+document.querySelectorAll('[data-per]').forEach(b => b.addEventListener('click', () => {
+  bozza.per = b.dataset.per; toccata = true; stato(S);
+}));
+$('#salva').addEventListener('click', () => {
+  manda({ tipo: 'tempi', lavoro: bozza.lavoro, pausa: bozza.pausa, per: bozza.per });
+  toccata = false;
+});
+$('#biomi').addEventListener('click', e => {
+  const p = e.target.closest('.prova');
+  if (p) { if (!p.disabled) manda({ tipo: 'prova', nome: p.dataset.prova }); return; }
+  const b = e.target.closest('.bioma');
+  if (b) manda({ tipo: 'bioma', nome: b.dataset.bioma });
+});
+
+// Nel browser, per vederla: pomodoro.html?finto
+if (new URLSearchParams(location.search).has('finto')) {
+  const ora = Date.now() / 1000;
+  stato({ oggi: new Date().toISOString().slice(0, 10), file: { lavoro_minuti: 45, pausa_minuti: 5, bioma: 'stagno', oggi: null },
+    lavoro_minuti: 45, pausa_minuti: 5, bioma: 'stagno', biomi: ['giardino', 'mare', 'pioggia', 'stagno'], in_prova: null,
+    lavoro_secondi: 1460, pausa_fino: 0, ora, resta_secondi: 1240, pausa_durata_minuti: 5, spento_fino: 0,
+    pause_oggi: 4, uscite: { oggi: 0, settimana: 2 }, giornata: { uscite: '0' } });
+  manda = m => console.log('manda', m);
+}
+</script>
+</body>
+</html>
