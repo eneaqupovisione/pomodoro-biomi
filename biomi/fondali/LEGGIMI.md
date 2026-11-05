@@ -9,6 +9,9 @@ muovono.
 | `<bioma>-gemini.jpg` | il fondale com'è uscito dal generatore, 1024×687 (3:2) |
 | `<bioma>.js` | lo stesso, impacchettato in `FONDALE = 'data:…'` per la scena |
 | `impacchetta.sh` | rifà i `.js` da tutti i `*-gemini.jpg` |
+| `tanuki-gemini.png` | le pose del tanuki del giardino (quattro passi, annusa, a pancia in su), disegnate da Gemini su fondo verde, col fondale del giardino allegato per lo stile |
+| `tanuki.js` | le stesse pose ridotte a pixel veri: 24 di lunghezza, 9 colori (`TANUKI_POSE`, `TANUKI_COLORI`) |
+| `tanuki-elabora.html` | rifà `tanuki.js` dal foglio di Gemini: va servita da un server locale (da file il canvas non legge i pixel), poi in console `elabora('tanuki-gemini.png', 24, 9)` |
 | `guarda.m` | apre un bioma in una finestra normale, con suono e tocco (`guarda giardino 5 22:30`) |
 | `foto.m` | fotografa una scena nella WKWebView, come la vede il Pomodoro (apre una finestra quasi invisibile) |
 | `cdp.mjs` | apre una scena in Chrome senza schermo e valuta un'espressione dopo N secondi |
@@ -57,9 +60,9 @@ piano rubato a chi sta lavorando, un profilo a parte, niente portachiavi.
 C="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 P=(--headless=new --disable-gpu --use-mock-keychain --password-store=basic --no-first-run --user-data-dir=/tmp/pomodoro-chrome)
 # una foto dopo 40 s di scena (tempo virtuale: ci mette pochi secondi)
-"$C" $P --hide-scrollbars --window-size=1280,832 --virtual-time-budget=40000 --screenshot=/tmp/notte.png "file://$PWD/scene/pioggia.html?suono=0&ora=21:30"
+"$C" $P --hide-scrollbars --window-size=1280,832 --virtual-time-budget=40000 --screenshot=/tmp/notte.png "file://$PWD/biomi/pioggia.html?suono=0&ora=21:30"
 # gli errori della pagina: righe CONSOLE su stderr
-"$C" $P --enable-logging=stderr --v=0 --virtual-time-budget=8000 --dump-dom "file://$PWD/scene/giardino.html?suono=1" 2>&1 >/dev/null | grep CONSOLE
+"$C" $P --enable-logging=stderr --v=0 --virtual-time-budget=8000 --dump-dom "file://$PWD/biomi/giardino.html?suono=1" 2>&1 >/dev/null | grep CONSOLE
 ```
 
 (Da lanciare con zsh nella radice del progetto. Sul Mac `timeout` non esiste: non
@@ -69,12 +72,12 @@ trova più finestre accese.
 
 **Per guardare dentro una pagina che gira in tempo vero** (per esempio se un suono
 si è decodificato) c'è `cdp.mjs` (Node 22 o più, per `WebSocket`):
-`node scene/fondali/cdp.mjs "file://$PWD/scene/pioggia.html?suono=1" 6 "!!vetroBuf"`.
+`node biomi/fondali/cdp.mjs "file://$PWD/biomi/pioggia.html?suono=1" 6 "!!vetroBuf"`.
 
 **I suoni non si controllano così**: li ascolta una persona, con `guarda`
 (si apre davanti ma non prende la tastiera):
 
 ```bash
-clang -fobjc-arc -framework Cocoa -framework WebKit scene/fondali/guarda.m -o /tmp/guarda
+clang -fobjc-arc -framework Cocoa -framework WebKit biomi/fondali/guarda.m -o /tmp/guarda
 /tmp/guarda stagno 5 22:30
 ```

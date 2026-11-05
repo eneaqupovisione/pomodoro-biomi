@@ -229,7 +229,7 @@ function disegnaBiomi() {
       <div class="carta-bioma">
         <button class="bioma" data-bioma="${n}" aria-pressed="false">
           <div class="anteprima"><iframe tabindex="-1" loading="lazy"
-            src="../scene/${encodeURIComponent(n)}.html?suono=0&fine=${Date.now() + S.pausa_minuti * 60000}&${extra}"></iframe></div>
+            src="../biomi/${encodeURIComponent(n)}.html?suono=0&fine=${Date.now() + S.pausa_minuti * 60000}&${extra}"></iframe></div>
           <div class="nome">${nomeBioma(n)}<em></em></div>
         </button>
         <button class="prova" data-prova="${n}">Provalo · 20 secondi</button>

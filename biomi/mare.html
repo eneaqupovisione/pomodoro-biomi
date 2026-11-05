@@ -16,7 +16,7 @@
 <body>
 <canvas id="c"></canvas>
 <div id="timer" class="fascia">5:00</div>
-<div id="invito" class="fascia">cerca la cosa più lontana che vedi</div>
+<div id="invito" class="fascia"></div>
 <script src="../musica/brani.js"></script>
 <script src="pausa.js"></script>
 <script src="fondali/mare.js"></script>
@@ -118,6 +118,61 @@ function gabbianoDisegna(t) {     // un'ombra che passa sulla sabbia e sull'acqu
   mix(x + G.v * 2, y, P.sh, .22); mix(x - G.v * 2, y + 1, P.sh, .18);
 }
 
+// ---------- Di notte, rare: le tartarughine ----------
+// Un nido nella sabbia asciutta ribolle, ne escono da quattro a
+// sette e corrono verso il mare puntando il riflesso della luna, come fanno davvero; lasciano le
+// tracce (che l'onda cancella, come la scrittura del dito) e l'onda che le raggiunge se le porta via.
+// Toccata, una si ferma un attimo e poi riparte.
+const TARTA = [".x.", "XSX", ".S.", "x.x"];
+let nido = null, tarte = [], prossimoNido = 15000 + Math.random() * 15000;
+function tartarugheDisegna(t, k) {
+  if (!nido && giorno < .3 && t > prossimoNido) {
+    prossimoNido = t + 70000 + rnd() * 60000;
+    const x = 30 + rnd() * (FW - 60), X = Math.round(x), y = asciuttoY[X] + 8 + rnd() * Math.max(2, Math.min(24, ZB - 6 - asciuttoY[X] - 8));
+    nido = { x, y, t0: t, quante: 4 + Math.floor(rnd() * 4), uscite: 0, prossima: t + 2500 };
+  }
+  if (nido) {
+    // la sabbia che ribolle, poi la buca
+    const q = (t - nido.t0) / 2500;
+    for (let n = 0; n < 6; n++) mix(nido.x + (rnd() - .5) * 6, nido.y + (rnd() - .5) * 3, rnd() < .5 ? P.sh : [200, 190, 160], q < 1 ? .25 : .08);
+    if (q >= 1) mix(nido.x, nido.y, P.sh, .45);
+    if (t > nido.prossima && nido.uscite < nido.quante) {
+      nido.uscite++; nido.prossima = t + 300 + rnd() * 500;
+      tarte.push({ x: nido.x + (rnd() - .5) * 3, y: nido.y, v: .006 + rnd() * .004, ph: rnd() * 6, ferma: 0, via: 0 });
+    }
+    if (nido.uscite >= nido.quante && !tarte.length) nido = null;
+  }
+  const lx = FW * .66;   // la luna: verso il suo riflesso
+  for (let n = tarte.length - 1; n >= 0; n--) {
+    const T = tarte[n], X = Math.round(T.x);
+    if (T.via) {          // l'onda se la porta: verso il largo, e sparisce
+      const q = (t - T.via) / 1500; if (q > 1) { tarte.splice(n, 1); continue; }
+      T.y -= .04 * k; T.a = 1 - q;
+    } else {
+      if (t > T.ferma) {
+        const dx = (lx - T.x) * .004 + Math.sin(t * .002 + T.ph) * .5;
+        T.x += dx * T.v * 16.7 * k * .25; T.y -= T.v * 16.7 * k;
+        const i = Math.round(T.y + 2) * FW + X; if (i >= 0 && i < N && sabbia[i]) scritto[i] = Math.max(scritto[i], .35);   // le tracce
+      }
+      T.a = 1;
+      if (X >= 0 && X < FW && fr[X] >= T.y - 1) T.via = t;
+      if (T.y < mareY[Math.max(0, Math.min(FW - 1, X))]) T.via = T.via || t;
+    }
+    // il passo: le pinne si alternano
+    const passo = t > T.ferma && !T.via ? Math.floor(t / 160 + T.ph) % 2 : 0;
+    TARTA.forEach((riga, j) => [...riga].forEach((ch, i) => {
+      if (ch === '.') return; let u = i - 1;
+      if (ch === 'x' || ch === 'X') u += (j === 1 ? (passo ? -.4 : .4) : (passo ? .4 : -.4)) * (i - 1);
+      mix(T.x + u, T.y - 1 + j, ch === 'S' ? [74, 88, 78] : [48, 58, 52], T.a);
+    }));
+    mix(T.x - 1, T.y, [150, 170, 168], .35 * T.a * (1 - giorno));   // la luna sul guscio
+  }
+}
+function tartarugaTocca(x, y, t) {
+  const T = tarte.find(T => !T.via && Math.abs(T.x - x) < 5 && Math.abs(T.y - y) < 5);
+  if (!T) return false; T.ferma = t + 1200; return true;
+}
+
 // ---------- I cerchi del dito sull'acqua, e le scintille del plancton ----------
 let cerchi = [], scintille = [];
 function cerchio(x, y) { cerchi.push({ x, y, t: performance.now() }); }
@@ -185,7 +240,7 @@ function scrivi(x0, y0, x1, y1) {
 cv.addEventListener('pointerdown', e => {
   audio(); if (AC && AC.state === 'suspended' && !document.hidden) AC.resume();
   const [x, y] = punto(e), t = performance.now(); giu = true;
-  if (granchioTocca(x, y, t)) { ultimo = null; return; }
+  if (granchioTocca(x, y, t) || tartarugaTocca(x, y, t)) { ultimo = null; return; }
   if (inAcqua(x, y, t)) { cerchio(x, y); if (giorno < .5) for (let k = 0; k < 10; k++) scintille.push({ x: x + (rnd() - .5) * 10, y: y + (rnd() - .5) * 6, t, v: rnd() }); ultimo = null; return; }
   ultimo = [x, y]; scrivi(x, y, x, y);
 });
@@ -244,7 +299,7 @@ function frame(t) {
   granchiDisegna(t, k);
   // i cerchi del dito
   cerchi = cerchi.filter(c => { const q = (t - c.t) / 2500; if (q > 1) return false; for (let a = 0; a < 6.28; a += .06) mix(c.x + Math.cos(a) * q * 18, c.y + Math.sin(a) * q * 8, P.schiuma, (1 - q) * .45); return true; });
-  colora(); luna(t); gabbianoDisegna(t);
+  colora(); luna(t); gabbianoDisegna(t); tartarugheDisegna(t, k);
   if (giorno > .4 && t > prossimoVerso) { prossimoVerso = t + 20000 + rnd() * 25000; versoGabbiano(); }   // anche senza ombra: sono lontani
   // le scintille del plancton, dopo la luce perché brillano da sole
   scintille = scintille.filter(s => { const q = (t - s.t) / 1600; if (q > 1) return false; mix(s.x + Math.sin(q * 6 + s.v * 9), s.y, P.plancton, (1 - q) * .9 * (.6 + .4 * Math.sin(t * .02 + s.v * 20))); return true; });

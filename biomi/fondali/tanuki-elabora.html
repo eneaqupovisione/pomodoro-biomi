@@ -1,0 +1,43 @@
+<!doctype html><meta charset="utf-8"><body><script>
+// ritaglia le pose del tanuki dal foglio di Gemini (fondo verde) e le riduce a pixel veri
+async function elabora(file, largo, colori) {
+  const im = new Image(); im.src = file; await im.decode();
+  const W = im.naturalWidth, H = im.naturalHeight, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d'); g.drawImage(im, 0, 0); const d = g.getImageData(0, 0, W, H).data;
+  const pieno = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) { const r = d[i*4], G = d[i*4+1], b = d[i*4+2]; pieno[i] = !(G > r + 25 && G > b + 25); }
+  // fasce di righe, poi di colonne
+  const fasce = (vuota, n) => { const f = []; let a = -1; for (let k = 0; k <= n; k++) { const v = k < n && !vuota(k); if (v && a < 0) a = k; if (!v && a >= 0) { if (k - a > 20) f.push([a, k]); a = -1; } } return f; };
+  const pose = [];
+  for (const [y0, y1] of fasce(y => { let s = 0; for (let x = 0; x < W; x++) s += pieno[y * W + x]; return s < 2; }, H))
+    for (const [x0, x1] of fasce(x => { let s = 0; for (let y = y0; y < y1; y++) s += pieno[y * W + x]; return s < 2; }, W)) {
+      // bordi stretti
+      let a = y1, b = y0; for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (pieno[y * W + x]) { a = Math.min(a, y); b = Math.max(b, y); }
+      pose.push({ x0, x1, y0: a, y1: b + 1 });
+    }
+  const f = (pose[0].x1 - pose[0].x0) / largo;     // la scala la dà la prima posa
+  const out = pose.map(P => {
+    const w = Math.ceil((P.x1 - P.x0) / f), h = Math.ceil((P.y1 - P.y0) / f), px = [];
+    for (let Y = 0; Y < h; Y++) for (let X = 0; X < w; X++) {
+      let n = 0, t = 0, s = [0, 0, 0], tutti = [];
+      // si allinea dal basso: le zampe stanno sull'ultima riga
+      const yb = P.y1 - (h - Y) * f;
+      for (let y = Math.floor(yb); y < yb + f; y++) for (let x = Math.floor(P.x0 + X * f); x < P.x0 + (X + 1) * f; x++) {
+        if (y < 0 || x >= W) continue; t++; const i = y * W + x; if (!pieno[i]) continue; n++; tutti.push([d[i*4], d[i*4+1], d[i*4+2]]);
+      }
+      if (n / t < .45) { px.push(null); continue; }
+      tutti.sort((p, q) => (p[0]+p[1]+p[2]) - (q[0]+q[1]+q[2]));
+      px.push(tutti[Math.floor(tutti.length * .4)]);      // un po' più scuro della media: tiene i contorni
+    }
+    return { w, h, px };
+  });
+  // tavolozza comune (k-means)
+  const tutti = out.flatMap(o => o.px.filter(Boolean));
+  let cen = []; for (let k = 0; k < colori; k++) cen.push(tutti[Math.floor(k / colori * tutti.length * .999)].slice());
+  tutti.sort((p, q) => (p[0]+p[1]+p[2]) - (q[0]+q[1]+q[2])); cen = cen.map((_, k) => tutti[Math.floor((k + .5) / colori * tutti.length)].slice());
+  const vicino = p => { let m = 0, md = 1e9; cen.forEach((c, k) => { const dd = (c[0]-p[0])**2 + (c[1]-p[1])**2 + (c[2]-p[2])**2; if (dd < md) { md = dd; m = k; } }); return m; };
+  for (let it = 0; it < 12; it++) { const s = cen.map(() => [0, 0, 0, 0]); for (const p of tutti) { const k = vicino(p); s[k][0] += p[0]; s[k][1] += p[1]; s[k][2] += p[2]; s[k][3]++; } cen = s.map((v, k) => v[3] ? [v[0]/v[3], v[1]/v[3], v[2]/v[3]] : cen[k]); }
+  const CH = 'abcdefghijklmnop';
+  return { pal: cen.map(c => c.map(Math.round)), pose: out.map(o => { const r = []; for (let y = 0; y < o.h; y++) { let s = ''; for (let x = 0; x < o.w; x++) { const p = o.px[y * o.w + x]; s += p ? CH[vicino(p)] : '.'; } r.push(s); } return r; }) };
+}
+</script>

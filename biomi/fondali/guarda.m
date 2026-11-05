@@ -1,8 +1,8 @@
-// guarda <bioma> [minuti] [ora, es. 22:30]: apre scene/<bioma>.html in una finestra normale, con
+// guarda <bioma> [minuti] [ora, es. 22:30] [altro, es. esagerato=3&studiato=1]: apre biomi/<bioma>.html in una finestra normale, con
 // suono e tocco, come la vede il Pomodoro in pausa ma senza coprire Claude.
 // Per far vedere (e sentire) un bioma a una persona. Si chiude con la finestra (o ⌘Q).
 // Non prende mai il primo piano da sola: chi lo guarda magari sta lavorando.
-// clang -fobjc-arc -framework Cocoa -framework WebKit scene/fondali/guarda.m -o /tmp/guarda
+// clang -fobjc-arc -framework Cocoa -framework WebKit biomi/fondali/guarda.m -o /tmp/guarda
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 
@@ -19,10 +19,11 @@ int main(int argc, char **argv) { @autoreleasepool {
   double minuti = argc > 2 ? atof(argv[2]) : 5;
   // la cartella del progetto: POMODORO, o quella da cui lo si lancia
   NSString *cartella = NSProcessInfo.processInfo.environment[@"POMODORO"] ?: NSFileManager.defaultManager.currentDirectoryPath;
-  NSString *scena = [cartella stringByAppendingFormat:@"/scene/%@.html", bioma];
+  NSString *scena = [cartella stringByAppendingFormat:@"/biomi/%@.html", bioma];
   NSURLComponents *u = [NSURLComponents componentsWithURL:[NSURL fileURLWithPath:scena] resolvingAgainstBaseURL:NO];
-  u.query = [NSString stringWithFormat:@"suono=1&fine=%.0f%@", (NSDate.date.timeIntervalSince1970 + minuti * 60) * 1000,
-             argc > 3 ? [@"&ora=" stringByAppendingString:@(argv[3])] : @""];
+  u.query = [NSString stringWithFormat:@"suono=1&fine=%.0f%@%@", (NSDate.date.timeIntervalSince1970 + minuti * 60) * 1000,
+             argc > 3 && argv[3][0] ? [@"&ora=" stringByAppendingString:@(argv[3])] : @"",
+             argc > 4 ? [@"&" stringByAppendingString:@(argv[4])] : @""];
 
   NSRect s = NSScreen.mainScreen.visibleFrame;
   NSRect f = NSInsetRect(s, s.size.width * .1, s.size.height * .1);

@@ -1,5 +1,5 @@
 // Pomodoro: dopo N minuti di lavoro, una pausa di K minuti coperta da un bioma in pixel art
-// (scene/*.html). Di base conta Claude in primo piano e copre solo le sue finestre: il resto
+// (biomi/*.html). Di base conta Claude in primo piano e copre solo le sue finestre: il resto
 // del Mac resta libero, e Claude continua a lavorare sotto. Con "app": "tutto" in
 // impostazioni.json conta qualunque app e copre ogni schermo (per lo studio, per il
 // computer in generale); con un'altra app, o una lista, conta e copre quelle. Dieci tocchi di fila
@@ -430,8 +430,8 @@ static BOOL schermoSpento(void) {
 
 - (NSURL *)scena:(BOOL)suono {
   NSString *bioma = self.biomaProva ?: [self impostazioni][@"bioma"];
-  NSString *p = [self percorso:[NSString stringWithFormat:@"scene/%@.html", bioma]];
-  if (![[NSFileManager defaultManager] fileExistsAtPath:p]) p = [self percorso:@"scene/stagno.html"];
+  NSString *p = [self percorso:[NSString stringWithFormat:@"biomi/%@.html", bioma]];
+  if (![[NSFileManager defaultManager] fileExistsAtPath:p]) p = [self percorso:@"biomi/stagno.html"];
   NSURLComponents *u = [NSURLComponents componentsWithURL:[NSURL fileURLWithPath:p] resolvingAgainstBaseURL:NO];
   NSMutableArray *q = [@[[NSURLQueryItem queryItemWithName:@"fine" value:[NSString stringWithFormat:@"%.0f", self.pausaFino * 1000]],
                          [NSURLQueryItem queryItemWithName:@"suono" value:suono ? @"1" : @"0"]] mutableCopy];
@@ -660,7 +660,7 @@ static CGFloat mezzoCentimetro(NSRect f) {
 - (void)mandaStato {
   if (!self.pagina) return;
   NSDictionary *imp = [self impostazioni];
-  NSArray *file = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:[self percorso:@"scene"] error:nil];
+  NSArray *file = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:[self percorso:@"biomi"] error:nil];
   NSMutableArray *biomi = [NSMutableArray array];
   for (NSString *f in [file sortedArrayUsingSelector:@selector(compare:)])
     if ([f.pathExtension isEqual:@"html"]) [biomi addObject:f.stringByDeletingPathExtension];
@@ -706,7 +706,7 @@ static CGFloat mezzoCentimetro(NSRect f) {
   } else if ([tipo isEqual:@"togli_oggi"]) {
     j[@"oggi"] = NSNull.null;
   } else if ([tipo isEqual:@"bioma"] && [b[@"nome"] isKindOfClass:NSString.class] &&
-             [[NSFileManager defaultManager] fileExistsAtPath:[self percorso:[NSString stringWithFormat:@"scene/%@.html", b[@"nome"]]]]) {
+             [[NSFileManager defaultManager] fileExistsAtPath:[self percorso:[NSString stringWithFormat:@"biomi/%@.html", b[@"nome"]]]]) {
     j[@"bioma"] = b[@"nome"];
   } else return;
   scriviJSON(j, [self percorso:@"impostazioni.json"]);
@@ -725,7 +725,7 @@ static CGFloat mezzoCentimetro(NSRect f) {
 // il conto né segna uscite), sopra l'app come quella vera. La finestra si fa da parte e torna alla fine.
 - (void)provaIlBioma:(NSString *)nome {
   if (self.prova20.isRunning || self.pausaFino > 0 ||
-      ![[NSFileManager defaultManager] fileExistsAtPath:[self percorso:[NSString stringWithFormat:@"scene/%@.html", nome]]]) return;
+      ![[NSFileManager defaultManager] fileExistsAtPath:[self percorso:[NSString stringWithFormat:@"biomi/%@.html", nome]]]) return;
   NSTask *t = [NSTask new];
   t.executableURL = [NSURL fileURLWithPath:NSBundle.mainBundle.executablePath];
   t.arguments = @[@"--prova", @"20", @"--bioma", nome];

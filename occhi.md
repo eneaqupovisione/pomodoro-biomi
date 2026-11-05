@@ -1,8 +1,10 @@
 # Gli occhi davanti allo schermo — cosa dice la ricerca
 
-La ricerca su cui si fondano la pausa e gli inviti del Pomodoro (novembre 2026).
-Gli inviti di `scene/pausa.js` vengono da qui: un bioma nuovo deve usare solo cose
-di questa pagina con solidità «provato» o «consenso».
+La ricerca su cui si fonda la pausa del Pomodoro (novembre 2026). Prima i biomi
+mostravano in fondo degli inviti per gli occhi, presi da qui; ora c'è un respiro
+guidato (inspira 4 s, trattieni 4, espira 6, in `biomi/pausa.js`). Se gli inviti
+tornassero, un bioma deve usare solo cose di questa pagina con solidità «provato» o
+«consenso».
 
 Solidità: **provato** (studi controllati concordi) · **debole** (pochi, piccoli,
 senza controllo) · **consenso** (linee guida, senza trial diretto) ·

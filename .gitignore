@@ -13,8 +13,8 @@ musica/**
 !musica/brani.js
 !musica/*/.gitkeep
 
-# Le registrazioni intere dei suoni: si scaricano dai link di scene/suoni/LEGGIMI.md
-scene/suoni/originali/
+# Le registrazioni intere dei suoni: si scaricano dai link di biomi/suoni/LEGGIMI.md
+biomi/suoni/originali/
 
 .DS_Store
 __pycache__/

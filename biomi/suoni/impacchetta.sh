@@ -16,14 +16,29 @@ pacchetto() {   # pacchetto <bioma> <nome>...
 }
 # pioggia: il sottofondo regolare (tutto il minuto è a -19 dB), il tuono (colpo al secondo 26,
 # poi il brontolio), il dito sul vetro (stridii di mezzo secondo, elencati in pioggia.html)
-taglia pioggia  pioggia-sul-vetro_bastipictures-243781.mp3 1.5 62
+# la pioggia: non più contro il vetro, che non era rilassante (bastipictures), ma una pioggia calma e uniforme (hoshisato, CC0), registrata
+# piano e alzata (è pioggia: il suo fruscio è il suono stesso), senza il rombo basso
+# e senza i suoi uccelli («non voglio sentire uccelli o animali vari»): quattro cinguettii fra 2,1 e
+# 3,2 kHz, tolti spegnendo quella banda solo nei loro istanti; la pioggia intorno non cambia
+U="between(t,10.1,11.5)+between(t,16.2,17.2)+between(t,18.3,19)+between(t,23.8,24.8)"
+ffmpeg -hide_banner -loglevel error -y -i originali/pioggia-calma_hoshisato-853565.mp3 -af "highpass=f=120,bandreject=f=2650:width_type=h:w=1300:enable='$U',bandreject=f=2650:width_type=h:w=1300:enable='$U',bandreject=f=2650:width_type=h:w=1300:enable='$U',loudnorm=I=-24:TP=-3" -ac 2 -ar 44100 -c:a aac -b:a 96k $T/pioggia.m4a
+# le fusa del gatto accarezzato (arseniiv, CC0): la parte calda, senza il fruscio acuto
+ffmpeg -hide_banner -loglevel error -y -ss 2.5 -t 14 -i originali/fusa-contenta_arseniiv-707237.mp3 -af highpass=f=60,lowpass=f=1800,loudnorm=I=-24:TP=-3 -ac 1 -ar 44100 -c:a aac -b:a 64k $T/fusa.m4a
 taglia tuono    tuono-lontano_rutgermuller-158692.mp3 23 50
 taglia vetro    dito-sul-vetro_mickdow-320912.mp3 0 46.5
-pacchetto pioggia pioggia tuono vetro
+# il traffico ovattato e il crepitio del vinile: il vinile di kyles (CC0), senza il rombo
+# basso, solo il crepitio; il traffico da un balcone di rionka (CC0), dal secondo 12 (prima ci sono
+# bip e un tram), passato da un passa-basso stretto: la città sentita da dietro il vetro
+ffmpeg -hide_banner -loglevel error -y -ss 10 -t 24 -i originali/vinile_kyles-637931.mp3 -af highpass=f=900,highpass=f=900,loudnorm=I=-40:TP=-9 -ac 2 -ar 44100 -c:a aac -b:a 64k $T/vinile.m4a
+ffmpeg -hide_banner -loglevel error -y -ss 12 -t 20 -i originali/traffico-balcone_rionka-475867.mp3 -af lowpass=f=420,lowpass=f=420,loudnorm=I=-34:TP=-8 -ac 1 -ar 44100 -c:a aac -b:a 64k $T/traffico.m4a
+pacchetto pioggia pioggia tuono vetro vinile traffico fusa
 # giardino: le foglie nel vento, due registrazioni da mescolare col vento
 taglia foglie   foglie-nel-vento_lunchmoney-378725.mp3 2.5 33.5
 taglia foglie2  foglie_kinoton-347557.mp3 0.3 18.4
-pacchetto giardino foglie foglie2
+# la nota di carillon (thomasjaunism, CC0): un fa acuto, suonato dalla scena a altezze diverse.
+# Nello stagno le lucciole, nel giardino la «celesta» degli onibi
+ffmpeg -hide_banner -loglevel error -y -t 2.35 -i originali/carillon-nota_thomasjaunism-218459.mp3 -af afade=t=out:st=1.8:d=0.55,loudnorm=I=-20:TP=-3 -ac 1 -ar 44100 -c:a aac -b:a 96k $T/carillon.m4a
+pacchetto giardino foglie foglie2 carillon
 # mare: «Calm ocean waves», un'onda ogni 10-15 s con creste chiare (la scena le trova e
 # ci fa arrivare l'onda disegnata); i gabbiani lontani, registrati molto piano
 taglia mare     onde-calme_samsterbirdies-578524.mp3 2 120
@@ -81,5 +96,5 @@ FI=0.005 FO=0.15 LN=-20 versi goccia goccia-fine_qubodup-792927.mp3 200 0:0.39
 # le raganelle: il «ribbit» dei film (Pacific Tree Frogs di CVLTIV8R), un coro fitto e basso, un giro
 # sotto il sottofondo, al posto dei «gunk» della rana verde
 ffmpeg -hide_banner -loglevel error -y -ss 0.3 -t 50 -i originali/raganelle_cvltiv8r-852657.mp3 -af highpass=f=500,loudnorm=I=-34:TP=-6 -ac 1 -ar 44100 -c:a aac -b:a 80k $T/raganelle.m4a
-pacchetto stagno rana giorno notte pettirosso merlo tocco tonfo goccia raganelle
+pacchetto stagno rana giorno notte pettirosso merlo tocco tonfo goccia raganelle carillon
 rm -r $T

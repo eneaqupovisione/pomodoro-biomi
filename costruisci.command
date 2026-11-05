@@ -1,6 +1,6 @@
 #!/bin/bash
 # Costruisce app/Pomodoro.app da app/pomodoro.m. L'app è un artefatto: si modifica
-# pomodoro.m, poi si rilancia questo. I biomi (scene/*.html) e la finestra
+# pomodoro.m, poi si rilancia questo. I biomi (biomi/*.html) e la finestra
 # (app/pomodoro.html) non serve ricostruirli: l'app li rilegge ogni volta che li apre.
 #
 # La firma: ad hoc, salvo POMODORO_FIRMA="<nome di un certificato di firma del portachiavi>".

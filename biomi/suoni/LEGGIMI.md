@@ -16,7 +16,7 @@ senza account.
 
 | file in `originali/` | Freesound | dove |
 |---|---|---|
-| `pioggia-sul-vetro_bastipictures-243781.mp3` | [rain against window 2](https://freesound.org/people/bastipictures/sounds/243781/) | pioggia: il sottofondo |
+| `pioggia-sul-vetro_bastipictures-243781.mp3` | [rain against window 2](https://freesound.org/people/bastipictures/sounds/243781/) | non usato più: contro il vetro non era rilassante |
 | `tuono-lontano_rutgermuller-158692.mp3` | [Distant Thunder and Rain from Half Open Window 1](https://freesound.org/people/RutgerMuller/sounds/158692/) | pioggia: il tuono dopo il lampo |
 | `dito-sul-vetro_mickdow-320912.mp3` | [Squeak Finger on Glass](https://freesound.org/people/mickdow/sounds/320912/) | pioggia: il dito che pulisce |
 | `foglie-nel-vento_lunchmoney-378725.mp3` | [Leaves Rustling in Wind](https://freesound.org/people/lunchmoney/sounds/378725/) | giardino: le foglie con la calma |
@@ -41,6 +41,11 @@ senza account.
 | `pioggia-da-dentro_allrealsound-161705.mp3` | [Rain from inside](https://freesound.org/people/allrealsound/sounds/161705/) | non usato (riserva) |
 | `pioggia-lucernario_metadex-235827.mp3` | [Soft rain on roof window](https://freesound.org/people/Metadex/sounds/235827/) | non usato (più piano, un acquazzone a metà) |
 | `vetro-che-stride_scottemoil-196394.mp3` | [squeaky_glass](https://freesound.org/people/scottemoil/sounds/196394/) | non usato (riserva per il dito) |
+| `pioggia-calma_hoshisato-853565.mp3` | [rain and drips](https://freesound.org/people/hoshisato/sounds/853565/) | pioggia: il sottofondo, una pioggia calma e uniforme (alzata, senza il rombo) |
+| `fusa-contenta_arseniiv-707237.mp3` | [cat purrs again](https://freesound.org/people/arseniiv/sounds/707237/) | pioggia: le fusa del gatto accarezzato (14 s, solo la parte calda) |
+| `carillon-nota_thomasjaunism-218459.mp3` | [Music box note](https://freesound.org/people/thomasjaunism/sounds/218459/) | stagno: i campanellini delle lucciole (pentatonica di fa, in alto); giardino: la «celesta» degli onibi (pentatonica minore, un'ottava sotto). La stessa nota, a altezze diverse |
+| `vinile_kyles-637931.mp3` | [vinyl record crackle nice stereo](https://freesound.org/people/kyles/sounds/637931/) | pioggia: il crepitio del giradischi (senza il rombo basso) |
+| `traffico-balcone_rionka-475867.mp3` | [street distant tram noise](https://freesound.org/people/rionka/sounds/475867/) | pioggia: il traffico ovattato, dal secondo 12 (prima ci sono bip e un tram), passa-basso a 420 Hz |
 
 `./impacchetta.sh` taglia i tratti scelti e li mette in `<bioma>.js`, con
 `SUONI = { nome: 'data:audio/mp4;base64,…' }`. È lo stesso trucco dei fondali:
@@ -49,8 +54,9 @@ una pagina aperta da file legge un `data:` e non un file. In `pausa.js`:
 - `ciclo(buf)` la fa girare in loop, con la fine sfumata nell'inizio;
 - `colpo(buf, inizio, durata, volume, pan)` ne suona un pezzo una volta.
 
-Restano fatti col codice: la ghiaia, i kodama, gli onibi, il bambù, la civetta,
-l'aereo della pioggia, e nello stagno i grilli (il plic, uguale per il dito, la rana
+Restano fatti col codice: la ghiaia, i kodama, gli onibi, l'aereo della pioggia, e
+nello stagno i grilli. Il bambù e la civetta ci sono ancora, ma spenti: fra i suoni
+registrati stonavano. (Il plic, uguale per il dito, la rana
 e le foglie, è diventato tre registrazioni, più acquose).
 
 Una regola imparata con lo stagno: **un sottofondo registrato va preso forte e abbassato,

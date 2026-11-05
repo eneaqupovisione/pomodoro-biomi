@@ -20,19 +20,19 @@ puoi scrivere, approvare né leggere, ma Claude continua a lavorare sotto e il r
 del Mac resta libero. Con un clic conta e copre **tutto il Mac**: per lo studio, o
 per il computer in generale. Oppure solo le app che scegli tu.
 
-Perché 45 e 5, e perché gli inviti in fondo alla pausa dicono quello che dicono
-(5 minuti ogni ora riducono dolore agli occhi e al collo; davanti allo schermo si
-ammicca un terzo del normale; guardare lontano scioglie la messa a fuoco; luce blu
-e modalità scura sono miti): [`occhi.md`](occhi.md), con le fonti.
+In fondo alla pausa, un respiro guidato: inspira 4 secondi, trattieni 4, espira 6.
+Perché 45 e 5 (5 minuti ogni ora riducono dolore agli occhi e al collo; davanti allo
+schermo si ammicca un terzo del normale; guardare lontano scioglie la messa a fuoco;
+luce blu e modalità scura sono miti): [`occhi.md`](occhi.md), con le fonti.
 
 ## I biomi
 
 | bioma | cosa c'è | cosa puoi fare |
 |---|---|---|
-| **stagno** | quattro koi che si evitano, la rana che salta fra le ninfee e a volte si mangia la libellula, foglie che cadono; di notte luna e lucciole | toccare l'acqua: si fanno i cerchi e le koi vengono a vedere; toccare la rana: salta |
-| **giardino** | un giardino zen con l'acero rosso, le foglie che cadono, le lanterne accese di notte; kodama di giorno, onibi di notte | rastrellare la ghiaia col dito |
-| **pioggia** | una città dietro un vetro appannato, gocce che scivolano, finestre che si accendono, lampi lontani | pulire il vetro col dito |
-| **mare** | la riva dall'alto, onde che salgono a tempo col suono, granchi e ombre di gabbiani; di notte la schiuma azzurra | scrivere sulla sabbia: l'onda cancella |
+| **stagno** | quattro koi che si evitano, la rana che salta fra le ninfee e a volte si mangia la libellula, foglie che cadono; di notte luna e lucciole, che suonano un campanellino quando si accendono | toccare l'acqua: si fanno i cerchi e le koi vengono a vedere; toccare la rana: salta |
+| **giardino** | un giardino zen con l'acero rosso nel vento, le foglie che cadono, le lanterne accese di notte; kodama di giorno, onibi di notte; al crepuscolo un tanuki attraversa la ghiaia girando intorno ai sassi | rastrellare la ghiaia col dito; toccare il tanuki: si finge morto |
+| **pioggia** | una città dietro un vetro appannato, gocce che scivolano, finestre che si accendono, lampi lontani; un gatto sul davanzale, che di notte dorme; il traffico ovattato e un giradischi | pulire il vetro col dito; accarezzare il gatto: fa le fusa |
+| **mare** | la riva dall'alto, onde che salgono a tempo col suono, granchi e ombre di gabbiani; di notte la schiuma azzurra, e a volte le tartarughine che corrono verso il mare | scrivere sulla sabbia: l'onda cancella |
 
 **Il giorno e la notte sono veri**: l'altezza del sole sul tuo luogo
 (`impostazioni.json`, `luogo`), calcolata senza rete. I suoni sono registrazioni
@@ -111,10 +111,10 @@ L'app non chiede permessi: legge solo dove stanno le finestre, non cosa c'è den
 |---|---|
 | `app/pomodoro.m` | l'app (Objective-C, un file solo): il conto, le coperture, il menu, la finestra |
 | `app/pomodoro.html` | la finestra del Pomodoro, riletta a ogni apertura |
-| `scene/*.html` | i biomi: ogni `.html` qui dentro è un bioma sceglibile |
-| `scene/pausa.js` | quello che i biomi hanno in comune: il sole, il timer, gli inviti, l'audio, la musica |
-| `scene/fondali/` | i fondali e gli strumenti per provarli ([`LEGGIMI.md`](scene/fondali/LEGGIMI.md)) |
-| `scene/suoni/` | i suoni registrati, tagliati e impacchettati ([`LEGGIMI.md`](scene/suoni/LEGGIMI.md), con le fonti) |
+| `biomi/*.html` | i biomi: ogni `.html` qui dentro è un bioma sceglibile |
+| `biomi/pausa.js` | quello che i biomi hanno in comune: il sole, il timer, il respiro, l'audio, la musica |
+| `biomi/fondali/` | i fondali e gli strumenti per provarli ([`LEGGIMI.md`](biomi/fondali/LEGGIMI.md)) |
+| `biomi/suoni/` | i suoni registrati, tagliati e impacchettati ([`LEGGIMI.md`](biomi/suoni/LEGGIMI.md), con le fonti) |
 | `modello/bioma.html` | un bioma minimo, da copiare per farne uno tuo |
 | `musica/` | i brani, che aggiungi tu ([`LEGGIMI.md`](musica/LEGGIMI.md)) |
 | `costruisci.command` | costruisce `app/Pomodoro.app` |
@@ -129,11 +129,11 @@ Per chi ci lavora (persone e agenti): [`AGENTS.md`](AGENTS.md).
 ## Licenze
 
 - **Il codice**: MIT, in [`LICENSE`](LICENSE).
-- **I suoni** in `scene/suoni/*.js`: tratti di registrazioni **CC0** di
+- **I suoni** in `biomi/suoni/*.js`: tratti di registrazioni **CC0** di
   [Freesound](https://freesound.org), elencate con gli autori in
-  [`scene/suoni/LEGGIMI.md`](scene/suoni/LEGGIMI.md).
-- **I fondali** in `scene/fondali/`: generati con Gemini; per quanto possano avere
+  [`biomi/suoni/LEGGIMI.md`](biomi/suoni/LEGGIMI.md).
+- **I fondali** in `biomi/fondali/`: generati con Gemini; per quanto possano avere
   una licenza, sono offerti come CC0.
-- **Il carattere** Silkscreen (timer e inviti) arriva da Google Fonts, con licenza
+- **Il carattere** Silkscreen (timer e respiro) arriva da Google Fonts, con licenza
   SIL Open Font License.
 - **La musica** non è inclusa.

@@ -16,13 +16,13 @@
 <body>
 <canvas id="c"></canvas>
 <div id="timer" class="fascia">5:00</div>
-<div id="invito" class="fascia">cerca la cosa più lontana che vedi</div>
+<div id="invito" class="fascia"></div>
 <script src="../musica/brani.js"></script>
 <script src="pausa.js"></script>
 <script src="fondali/stagno.js"></script>
 <script src="suoni/stagno.js"></script>
 <script>
-// Lo stagno della pausa. La query, il sole, il timer, gli inviti, la campana
+// Lo stagno della pausa. La query, il sole, il timer, il respiro, la campana
 // e la musica stanno in pausa.js, comuni a tutti i biomi. L'acqua, le ninfee e le canne
 // sono il fondale fatto con Gemini (fondali/stagno-gemini.jpg); koi, rana, libellula,
 // foglie, cerchi, lucciole e luna sono codice.
@@ -64,10 +64,11 @@ fondo = () => {
   suono('rana').then(b => ranaBuf = b).catch(() => {});
   for (const n in VERSI) suono(n).then(b => uccelli[n] = b).catch(() => {});
   for (const n in ACQUA) suono(n).then(b => acquaBuf[n] = b).catch(() => {});
+  suono('carillon').then(b => carillonBuf = b).catch(() => {});
   // le raganelle, il «ribbit» dei film: un coro fitto e basso, di giorno e di notte. Ha preso il posto
-  // dei gracidii della rana verde, che non suonavano come le rane dei film
+  // dei gracidii della rana verde, che non suonavano come le rane dei film. Appena sotto il resto: 0,5
   const rg = AC.createGain(); rg.gain.value = 0; rg.connect(master);
-  suono('raganelle').then(b => { const s = ciclo(b, 2); s.connect(rg); s.start(); rg.gain.setTargetAtTime(.7, AC.currentTime, 2); }).catch(() => {});
+  suono('raganelle').then(b => { const s = ciclo(b, 2); s.connect(rg); s.start(); rg.gain.setTargetAtTime(.5, AC.currentTime, 2); }).catch(() => {});
   // di giorno lo stagno (rane, uccelli, insetti), di notte la palude; al tramonto tutti e due
   for (const [nome, v] of [['giorno', giorno], ['notte', 1 - giorno]]) {
     if (v < .05) continue;
@@ -155,6 +156,33 @@ function acquaDisegna(t) {        // ogni pixel d'acqua prende il colore di un v
     }
     const j = i * 4; d[j] = base[s * 3]; d[j + 1] = base[s * 3 + 1]; d[j + 2] = base[s * 3 + 2]; d[j + 3] = 255;
   }
+}
+
+// ---------- Lo stagno della giornata (OGGI, dalla query: facoltativi, l'app di oggi non li manda) ----------
+// esagerato 2 o 3 → l'acqua si intorbida e le koi si vedono meno; studiato → un fior di loto su una
+// ninfea (chiuso di notte); non mangiato → le koi salgono a galla a chiedere da mangiare
+const TORBIDA = OGGI.esagerato >= 2 ? (OGGI.esagerato - 1) * .2 : 0, FANGO = [74, 76, 50];
+function torbida() {
+  if (!TORBIDA) return;
+  for (let i = 0; i < FW * FH; i++) if (acqua[i]) { const j = i * 4; d[j] += (FANGO[0] - d[j]) * TORBIDA; d[j + 1] += (FANGO[1] - d[j + 1]) * TORBIDA; d[j + 2] += (FANGO[2] - d[j + 2]) * TORBIDA; }
+}
+const LOTO = ["....W....", "..p.W.p..", ".pPpPpPp.", "pPPPyPPPp", "pPPyyyPPp", ".pPPPPPp.", "..ppPpp..", "....g...."];
+const BOCCIOLO = ["....W....", "...pWp...", "...PPP...", "...pPp...", "....p....", "....g...."];
+const LC = { W: [250, 214, 224], P: [238, 150, 176], p: [196, 98, 132], y: [246, 216, 92], g: [70, 96, 52] };
+function lotoDisegna(t) {
+  if (OGGI.studiato !== 1 || ninfee.length < 2) return;
+  const n = ninfee[ninfee.length > 2 ? 2 : 1], ox = n.x * 2, oy = n.y * 2 - 3, dondola = Math.round(Math.sin(t * .0008) * .6);
+  const F = giorno < .3 ? BOCCIOLO : LOTO, top = oy - F.length + 3;
+  F.forEach((riga, j) => [...riga].forEach((ch, i) => { if (ch !== '.') mix(ox - 4 + i + 2, top + j + 2, [10, 22, 22], .35); }));   // l'ombra sull'acqua
+  F.forEach((riga, j) => [...riga].forEach((ch, i) => { if (ch !== '.') set(ox - 4 + i + dondola, top + j, LC[ch]); }));
+}
+let prossimaBocca = 3000;
+function bocche(t) {
+  if (OGGI.mangiato !== 0 || t < prossimaBocca || !koi.length) return;
+  prossimaBocca = t + 4000 + Math.random() * 5000;
+  const f = koi[Math.floor(Math.random() * koi.length)], x = f.x + Math.cos(f.a) * 7, y = f.y + Math.sin(f.a) * 6;
+  if (!suAcqua(x, y)) return;
+  f.v *= .4; cerchio(x, y, true); bagna('goccia', .1, x);
 }
 
 // ---------- Le koi: quattro, ognuna sceglie dove andare e sente le altre ----------
@@ -344,6 +372,18 @@ function colora() {
   }
 }
 const lucciole = Array.from({ length: 7 }, (_, i) => ({ x: Math.random() * FW, y: ZT + 10 + Math.random() * (ZB - ZT - 20), ph: i * 1.3, a: Math.random() * 6 }));
+// le lucciole suonano: un campanellino raro e casuale quando una si accende del tutto. È la nota di carillon, a altezze diverse
+// della scala pentatonica di fa, in alto e piano
+let carillonBuf = null, ultimoCampanello = 0;
+const PENTA = [1, 1.122, 1.26, 1.498, 1.682, 2];
+function campanello(x) {
+  if (!AC || !carillonBuf || AC.currentTime - ultimoCampanello < 2.5 || Math.random() < .55) return;
+  ultimoCampanello = AC.currentTime;
+  const s = AC.createBufferSource(), g = AC.createGain(), p = AC.createStereoPanner();
+  s.buffer = carillonBuf; s.playbackRate.value = PENTA[Math.floor(Math.random() * PENTA.length)] * (.995 + Math.random() * .01);
+  g.gain.value = .05 + Math.random() * .04; p.pan.value = Math.max(-1, Math.min(1, (x / FW - .5) * 1.4));
+  s.connect(g); g.connect(p); p.connect(master); s.start();
+}
 function notte(t) {
   const n = 1 - giorno; if (n < .05) return;
   const mx = FW * .68;
@@ -355,6 +395,7 @@ function notte(t) {
     f.a += Math.sin(t * .0004 + f.ph) * .02; f.x += Math.cos(f.a) * .08; f.y += Math.sin(f.a) * .05;
     if (f.x < 10 || f.x > FW - 10 || f.y < ZT + 6 || f.y > ZB - 6) f.a += Math.PI;
     const b = Math.max(0, Math.sin(t * .0018 + f.ph * 2)) * n;
+    if (b > .97 * n && !f.alta) { f.alta = true; campanello(f.x); } else if (b < .5 * n) f.alta = false;
     mix(f.x, f.y, P.fly, b); for (const [a, c] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) mix(f.x + a, f.y + c, P.fly, b * .35);
   }
 }
@@ -383,9 +424,10 @@ function frame(t) {
   koi.forEach(f => nuota(f, t, k)); koi.forEach(f => koiDisegna(f, t, true));
   for (let i = foglie.length - 1; i >= 0; i--) if (!foglia(foglie[i], t, k) || foglie[i].x < -8 || foglie[i].x > FW + 8) foglie.splice(i, 1);
   koi.forEach(f => koiDisegna(f, t, false));
+  torbida(); bocche(t);
   if (t > prossimaFoglia) { prossimaFoglia = t + (AUTUNNO ? 2500 + Math.random() * 4500 : 7000 + Math.random() * 9000); if (foglie.length < 10) foglie.push(nuovaFoglia()); }
   cerchi = cerchi.filter(cerchioDisegna);
-  ranaDisegna(t); libellulaDisegna(t);
+  lotoDisegna(t); ranaDisegna(t); libellulaDisegna(t);
   colora(); notte(t);
   cx.putImageData(img, 0, 0);
   // gli uccellini coprivano grilli e rane: la rana più spesso e più forte, i grilli più fitti,

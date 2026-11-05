@@ -16,8 +16,8 @@
 <body>
 <canvas id="c"></canvas>
 <div id="timer" class="fascia">5:00</div>
-<div id="invito" class="fascia">cerca la cosa più lontana che vedi</div>
-<!-- Copiato in scene/<nome>.html diventa un bioma. I percorsi sono relativi a scene/.
+<div id="invito" class="fascia">inspira</div>
+<!-- Copiato in biomi/<nome>.html diventa un bioma. I percorsi sono relativi a biomi/.
      fondali/<nome>.js e suoni/<nome>.js possono mancare: il bioma va lo stesso. -->
 <script src="../musica/brani.js"></script>
 <script src="pausa.js"></script>
@@ -34,7 +34,7 @@
 // ---------- La tela: alta FH pixel veri, larga quanto chiede la finestra ----------
 const ASPETTO = innerWidth > 0 && innerHeight > 0 ? Math.min(3, Math.max(.4, innerWidth / innerHeight)) : 1.6;
 const FH = 228, FW = 2 * Math.round(114 * ASPETTO), N = FW * FH;
-const ZT = 38, ZB = FH - 38;              // sopra e sotto: timer e invito, qui non passa niente
+const ZT = 38, ZB = FH - 38;              // sopra e sotto: timer e respiro, qui non passa niente
 const cv = document.getElementById('c'); cv.width = FW; cv.height = FH;
 const cx = cv.getContext('2d'), img = cx.createImageData(FW, FH), d = img.data;
 const rnd = Math.random;

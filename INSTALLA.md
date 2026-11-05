@@ -64,7 +64,7 @@ Toglierlo dall'accesso: `./installa.sh --togli`.
 
 - `luogo`: latitudine e longitudine per il sole dei biomi (giorno, tramonto e notte
   veri). Bastano due decimali, la città basta. Senza, Roma.
-- `bioma`: il nome di un file di `scene/` senza `.html`.
+- `bioma`: il nome di un file di `biomi/` senza `.html`.
 - `oggi`: minuti diversi solo per una data,
   `{"data": "2026-11-05", "lavoro_minuti": 30, "pausa_minuti": 5}`.
 - `app`: cosa conta e cosa copre la pausa (si sceglie anche dalla finestra, «Cosa

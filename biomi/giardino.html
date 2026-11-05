@@ -16,10 +16,11 @@
 <body>
 <canvas id="c"></canvas>
 <div id="timer" class="fascia">5:00</div>
-<div id="invito" class="fascia">cerca la cosa più lontana che vedi</div>
+<div id="invito" class="fascia"></div>
 <script src="../musica/brani.js"></script>
 <script src="pausa.js"></script>
 <script src="fondali/giardino.js"></script>
+<script src="fondali/tanuki.js"></script>
 <script src="suoni/giardino.js"></script>
 <script>
 // Il giardino zen con l'acero rosso. Il fondale è di Gemini (fondali/giardino-gemini.jpg,
@@ -204,9 +205,26 @@ fondo = () => {
   folataG = AC.createGain(); folataG.gain.value = .0001; folataG.connect(master);
   suono('foglie').then(b => { const s = ciclo(b, 2); s.connect(calmaG); s.start(); }).catch(() => {});
   suono('foglie2').then(b => { foglieBuf = b; const s = ciclo(b, 1.5); s.connect(folataG); s.start(); }).catch(() => {});
+  suono('carillon').then(b => carillonBuf = b).catch(() => {});
   const g = rumore(2, .9), bp2 = AC.createBiquadFilter(); bp2.type = 'bandpass'; bp2.frequency.value = 3200; bp2.Q.value = .8;
   ghiaiaG = AC.createGain(); ghiaiaG.gain.value = 0; g.connect(bp2); bp2.connect(ghiaiaG); ghiaiaG.connect(master); g.start();
 };
+// di notte, con gli onibi, qualche nota di celesta, per il lato misterioso: la nota di carillon, un'ottava
+// sotto, su una pentatonica minore, dal lato di un onibi; e la musica si abbassa
+let carillonBuf = null, prossimaCelesta = 4000;
+const MINORE = [1, 1.189, 1.335, 1.498, 1.782].map(r => r * .5);
+function celesta(t) {
+  const n = sm(.55, .15, giorno); respiro = 1 - .3 * n;
+  if (!AC || !carillonBuf || n < .5 || t < prossimaCelesta || !onibi.length) return;
+  prossimaCelesta = t + 6000 + Math.random() * 9000;
+  const f = onibi[Math.floor(Math.random() * onibi.length)], quante = Math.random() < .35 ? 2 : 1;
+  for (let q = 0; q < quante; q++) {
+    const s = AC.createBufferSource(), g = AC.createGain(), p = AC.createStereoPanner();
+    s.buffer = carillonBuf; s.playbackRate.value = MINORE[Math.floor(Math.random() * MINORE.length)];
+    g.gain.value = .07 + Math.random() * .04; p.pan.value = Math.max(-1, Math.min(1, (f.x / FW - .5) * 1.4));
+    s.connect(g); g.connect(p); p.connect(master); s.start(AC.currentTime + q * (.45 + Math.random() * .3));
+  }
+}
 function scuoti() {             // l'albero scosso: un pezzo di foglie registrate, più forte
   if (!AC || !foglieBuf) return; colpo(foglieBuf, Math.random() * (foglieBuf.duration - 2), 1.6, 1.1, (Math.random() - .5) * .6);
 }
@@ -287,7 +305,7 @@ function sullaChioma(x, y) { const i = Math.round(y) * FW + Math.round(x); retur
 cv.addEventListener('pointerdown', e => {
   audio(); if (AC && AC.state === 'suspended' && !document.hidden) AC.resume();
   const [x, y] = punto(e); giu = true; ultimoTocco = performance.now(); puntatore = [x, y];
-  if (kodamaTocca(x, y, performance.now()) || onibiTocca(x, y, performance.now())) { ultimo = null; return; }
+  if (kodamaTocca(x, y, performance.now()) || onibiTocca(x, y, performance.now()) || tanukiTocca(x, y, performance.now())) { ultimo = null; return; }
   if (sullaChioma(x, y)) { for (let k = 0; k < 3 + rnd() * 3; k++) cade(); scossa = performance.now(); scuoti(); ultimo = null; }
   else ultimo = [x, y, performance.now()];
 });
@@ -301,15 +319,141 @@ cv.addEventListener('pointermove', e => {
 });
 addEventListener('pointerup', () => { giu = false; ultimo = null; if (ghiaiaG) ghiaiaG.gain.setTargetAtTime(0, AC.currentTime, .08); });
 
+// ---------- Al tramonto, il tanuki ----------
+// Attraversa la ghiaia (al tramonto e all'alba, nel chiaroscuro),
+// lascia le impronte, che si richiudono come i solchi del rastrello; ogni tanto si ferma ad annusare.
+// Toccato, si finge morto a pancia in su, poi si rialza e se ne va più svelto.
+// Le pose le ha disegnate Gemini (fondali/tanuki.js): quelle fatte a mano non erano belle.
+// I colori di Gemini sono più chiari della ghiaia: al crepuscolo sembrava una pecora. Si scuriscono
+// fino al tono delle pietre.
+const TANUKI_TONI = TANUKI_COLORI.map(c => [c[0] * .58, c[1] * .55, c[2] * .52]);
+// La strada: prima passava sopra i sassi, ora no. Cammina solo
+// sulla ghiaia aperta: pietre, lanterne e radici hanno il contorno scuro (sotto 35) e lui, allargato
+// quanto le sue zampe, lo gira intorno, stando lontano quanto può. I solchi disegnati, le foglie a
+// terra e la ghiaia colorata dalle lanterne non contano; le pietre chiuse dentro i contorni sì.
+let largo = null;              // per ogni pixel: quanto è lontano dal primo ostacolo (0 = non si passa)
+function mappaTanuki() {
+  const Y0 = Math.round(FH * .45), Y1 = ZB - 2, ost = new Uint8Array(N), vis = new Uint8Array(N);
+  for (let y = 0; y < FH; y++) for (let x = 0; x < FW; x++) {
+    const i = y * FW + x, mx = Math.max(base[i * 3], base[i * 3 + 1], base[i * 3 + 2]);
+    const caldo = base[i * 3] > 150 && base[i * 3] - base[i * 3 + 2] > 55;   // la luce delle lanterne, fra le radici
+    ost[i] = y < Y0 || y > Y1 || (!ghiaia[i] && (mx < 35 || caldo)) ? 1 : 0;
+  }
+  // i grumi piccoli di scuro (meno di 8 pixel) sono ombre di un solco, non sassi
+  for (let i0 = 0; i0 < N; i0++) {
+    if (!ost[i0] || vis[i0]) continue;
+    const g = [i0]; vis[i0] = 1;
+    for (let q = 0; q < g.length && g.length < 8; q++) { const i = g[q], x = i % FW;
+      for (const j of [i - 1, i + 1, i - FW, i + FW, i - FW - 1, i - FW + 1, i + FW - 1, i + FW + 1]) if (j >= 0 && j < N && Math.abs(j % FW - x) < 2 && ost[j] && !vis[j]) { vis[j] = 1; g.push(j); } }
+    if (g.length < 8) for (const i of g) ost[i] = 0;
+  }
+  // il corpo: un ostacolo pesa 11 pixel a destra e a sinistra, 2 sopra e sotto
+  const lar = new Uint8Array(N);
+  for (let y = 0; y < FH; y++) for (let x = 0; x < FW; x++) { let o = 0; for (let u = -11; u <= 11 && !o; u++) { const X = x + u; if (X >= 0 && X < FW) o = ost[y * FW + X]; } lar[y * FW + x] = o; }
+  const blocco = new Uint8Array(N);
+  for (let y = 0; y < FH; y++) for (let x = 0; x < FW; x++) { let o = 0; for (let v = -2; v <= 2 && !o; v++) { const Y = y + v; o = Y < 0 || Y >= FH ? 1 : lar[Y * FW + x]; } blocco[y * FW + x] = o; }
+  // si tiene solo la ghiaia più grande e aperta: quella chiusa dentro le pietre resta fuori
+  const comp = new Int32Array(N); let migliore = 0, quanti = 0, n = 0;
+  for (let i0 = 0; i0 < N; i0++) {
+    if (blocco[i0] || comp[i0]) continue;
+    const g = [i0]; comp[i0] = ++n;
+    for (let q = 0; q < g.length; q++) { const i = g[q], x = i % FW;
+      for (const j of [i - 1, i + 1, i - FW, i + FW]) if (j >= 0 && j < N && Math.abs(j % FW - x) < 2 && !blocco[j] && !comp[j]) { comp[j] = n; g.push(j); } }
+    if (g.length > quanti) { quanti = g.length; migliore = n; }
+  }
+  // la distanza dall'ostacolo più vicino, in due passate
+  largo = new Float32Array(N);
+  for (let i = 0; i < N; i++) largo[i] = comp[i] === migliore ? 99 : 0;
+  for (let y = 1; y < FH; y++) for (let x = 1; x < FW - 1; x++) { const i = y * FW + x; if (largo[i]) largo[i] = Math.min(largo[i], largo[i - 1] + 1, largo[i - FW] + 1, largo[i - FW - 1] + 1.4, largo[i - FW + 1] + 1.4); }
+  for (let y = FH - 2; y >= 0; y--) for (let x = FW - 2; x > 0; x--) { const i = y * FW + x; if (largo[i]) largo[i] = Math.min(largo[i], largo[i + 1] + 1, largo[i + FW] + 1, largo[i + FW + 1] + 1.4, largo[i + FW - 1] + 1.4); }
+}
+// Il cammino più comodo da a a b (Dijkstra): ogni passo costa di più vicino agli ostacoli.
+function cammino(a, b) {
+  const costo = new Float64Array(N).fill(1e9), da = new Int32Array(N).fill(-1), h = [];
+  const su = (i, c) => { h.push([c, i]); let k = h.length - 1; while (k) { const p = (k - 1) >> 1; if (h[p][0] <= h[k][0]) break; [h[p], h[k]] = [h[k], h[p]]; k = p; } };
+  const giu = () => { const top = h[0], l = h.pop(); if (h.length) { h[0] = l; let k = 0; for (;;) { const s = 2 * k + 1, r = s + 1; let m = k; if (s < h.length && h[s][0] < h[m][0]) m = s; if (r < h.length && h[r][0] < h[m][0]) m = r; if (m === k) break; [h[m], h[k]] = [h[k], h[m]]; k = m; } } return top; };
+  costo[a] = 0; su(a, 0);
+  while (h.length) {
+    const [c, i] = giu(); if (i === b) break; if (c > costo[i]) continue;
+    const x = i % FW;
+    for (let v = -1; v <= 1; v++) for (let u = -1; u <= 1; u++) {
+      if (!u && !v) continue; const X = x + u, j = i + v * FW + u; if (X < 0 || X >= FW || j < 0 || j >= N || !largo[j]) continue;
+      const nc = c + (u && v ? 1.41 : 1) * (1 + 10 / (1 + largo[j]));
+      if (nc < costo[j]) { costo[j] = nc; da[j] = i; su(j, nc); }
+    }
+  }
+  if (da[b] < 0) return null;
+  const p = []; for (let i = b; i >= 0; i = da[i]) p.push([i % FW, Math.floor(i / FW)]);
+  return p.reverse();
+}
+// Da un bordo all'altro, passando per un punto a caso nel mezzo; poi la si ammorbidisce e la si
+// misura, così il tanuki la percorre a passo costante.
+function stradaTanuki(v) {
+  if (!largo) mappaTanuki();
+  const scegli = (x0, x1, y0) => { for (let t = 0; t < 400; t++) { const x = Math.round(x0 + rnd() * (x1 - x0)), y = Math.round(y0 + rnd() * (ZB - y0)), i = y * FW + x; if (largo[i] > 4) return i; } return -1; };
+  const a = scegli(1, 12, FH * .55), m = scegli(FW * .3, FW * .7, FH * .66), b = scegli(FW - 13, FW - 2, FH * .55);   // nel mezzo, sotto l'albero
+  if (a < 0 || m < 0 || b < 0) return null;
+  const p1 = cammino(a, m), p2 = cammino(m, b); if (!p1 || !p2) return null;
+  let p = [...p1, ...p2.slice(1)]; if (v < 0) p.reverse();
+  for (let giro = 0; giro < 3; giro++) p = p.map((q, k) => { let sx = 0, sy = 0, c = 0; for (let o = -6; o <= 6; o++) { const r = p[Math.max(0, Math.min(p.length - 1, k + o))]; sx += r[0]; sy += r[1]; c++; } return [sx / c, sy / c]; });
+  p.unshift([p[0][0] - v * 20, p[0][1]]); p.push([p.at(-1)[0] + v * 20, p.at(-1)[1]]);
+  const s = [0]; for (let k = 1; k < p.length; k++) s.push(s[k - 1] + Math.hypot(p[k][0] - p[k - 1][0], p[k][1] - p[k - 1][1]));
+  return { p, s };
+}
+function lungo(S, d) {          // il punto della strada a distanza d dall'inizio
+  let k = 1; while (k < S.s.length - 1 && S.s[k] < d) k++;
+  const f = Math.min(1, Math.max(0, (d - S.s[k - 1]) / (S.s[k] - S.s[k - 1] || 1)));
+  return [S.p[k - 1][0] + (S.p[k][0] - S.p[k - 1][0]) * f, S.p[k - 1][1] + (S.p[k][1] - S.p[k - 1][1]) * f];
+}
+let tanuki = null, prossimoTanuki = 8000 + Math.random() * 12000;
+function tanukiDisegna(t, k) {
+  const crepuscolo = giorno > .12 && giorno < .8;
+  if (!tanuki && crepuscolo && t > prossimoTanuki) {
+    prossimoTanuki = t + 50000 + rnd() * 40000;
+    const v = rnd() < .5 ? 1 : -1, S = stradaTanuki(v);
+    if (S) { const [x, y] = lungo(S, 0); tanuki = { S, d: 0, x, y, v, vel: .011, st: 'va', fino: t + 3000 + rnd() * 4000, passi: 0 }; }
+  }
+  if (!tanuki) return;
+  const T = tanuki;
+  if (T.st === 'va') {
+    T.d += T.vel * 16.7 * k;
+    const [x, y] = lungo(T.S, T.d), [ax] = lungo(T.S, T.d + 4);
+    if (Math.abs(ax - x) > .8) T.v = ax > x ? 1 : -1;      // girato verso dove va
+    T.x = x; T.y = y;                                        // la strada è sotto le zampe
+    const p = Math.floor(T.d / 5); if (p !== T.passi) {   // un'impronta ogni cinque pixel, su due file
+      T.passi = p;
+      const X = Math.round(T.x - T.v * 6), Y = Math.round(T.y - 1 + (p % 2) * 2), i = Y * FW + X;
+      if (X >= 0 && X < FW && Y < FH && ghiaia[i]) { solco[i] = .9; segno[i] = -1; }
+    }
+    if (t > T.fino && T.vel < .015) { T.st = 'annusa'; T.fino = t + 1200 + rnd() * 1600; }
+    if (T.d >= T.S.s.at(-1)) { tanuki = null; return; }
+  } else if (T.st === 'annusa') { if (t > T.fino) { T.st = 'va'; T.fino = t + 4000 + rnd() * 5000; } }
+  else if (T.st === 'morto') { if (t > T.fino) { T.st = 'va'; T.vel = .022; T.fino = t + 1e9; } }
+  const righe = T.st === 'morto' ? TANUKI_POSE.morto : T.st === 'annusa' ? TANUKI_POSE.annusa
+    : TANUKI_POSE.passo[Math.floor(T.d / 3) % 4];         // un passo ogni tre pixel di strada
+  // l'ombra, poi il corpo, con le zampe sulla strada; girato verso dove va
+  for (let u = -9; u <= 9; u++) mix(T.x + u, T.y + 1, [20, 18, 16], .28 * (1 - (u / 10) ** 2));
+  const w = righe[0].length, h = righe.length;
+  righe.forEach((riga, j) => { for (let i = 0; i < w; i++) {
+    const ch = riga[i]; if (ch === '.') continue;
+    mix(T.x + (T.v > 0 ? i - w / 2 : w / 2 - i), T.y - h + 1 + j, TANUKI_TONI[ch.charCodeAt(0) - 97], 1);
+  } });
+}
+function tanukiTocca(x, y, t) {
+  const T = tanuki; if (!T || T.st === 'morto' || Math.abs(x - T.x) > 13 || y < T.y - 14 || y > T.y + 3) return false;
+  T.st = 'morto'; T.fino = t + 3000; return true;
+}
+
 // ---------- Il giro ----------
 let vento = .3, scossa = -1e4, prec = 0, prossimoBambu = 9000 + Math.random() * 10000, prossimaCivetta = 10000 + Math.random() * 10000;
 const SOLCO = piano => [piano.map(v => v * .68), piano.map(v => v * 1.22), piano];
 function frame(t) {
   const k = prec ? Math.min(3, (t - prec) / 16.7) : 1; prec = t;
-  vento = Math.max(0, .35 + .4 * Math.sin(t * .00013) * Math.sin(t * .00041 + 1) + .25 * Math.sin(t * .00071 + 2)) + (t - scossa < 900 ? 1.5 : 0);
+  vento = Math.max(0, .45 + .5 * Math.sin(t * .00013) * Math.sin(t * .00041 + 1) + .3 * Math.sin(t * .00071 + 2)) + (t - scossa < 900 ? 1.5 : 0);
   if (calmaG && Math.floor(t / 400) !== Math.floor((t - 16.7 * k) / 400)) {
     const folata = Math.max(0, Math.min(1.2, vento) - .3);
-    calmaG.gain.setTargetAtTime(.35 + Math.min(.5, vento * .4), AC.currentTime, 1.2); folataG.gain.setTargetAtTime(folata * folata * 1.4, AC.currentTime, 1.5);
+    // più importanza al vento: le foglie più forti, le folate di più
+    calmaG.gain.setTargetAtTime(.6 + Math.min(.6, vento * .55), AC.currentTime, 1.2); folataG.gain.setTargetAtTime(Math.min(1.6, folata * 2.4), AC.currentTime, 1.5);
   }
   const dec = Math.pow(.9991, k), [cS, cC, cP] = SOLCO(piano), amp = .5 + vento * 1.1;
   for (let i = 0, j = 0; i < N; i++, j += 4) {
@@ -325,13 +469,15 @@ function frame(t) {
     }
     d[j] = r; d[j + 1] = g; d[j + 2] = b; d[j + 3] = 255;
   }
-  kodamaDisegna(t, k);
+  kodamaDisegna(t, k); tanukiDisegna(t, k);
   for (let i = foglie.length - 1; i >= 0; i--) if (!foglia(foglie[i], t, k)) foglie.splice(i, 1);
   if (rnd() < (.006 + vento * vento * .025) * k && foglie.length < 70) cade();
-  colora(); lumi(t); onibiDisegna(t, k);
+  colora(); lumi(t); onibiDisegna(t, k); celesta(t);
   cx.putImageData(img, 0, 0);
-  if (t > prossimoBambu) { prossimoBambu = t + 40000 + Math.random() * 30000; bambu(); }
-  if (giorno < .4 && t > prossimaCivetta) { prossimaCivetta = t + 35000 + Math.random() * 40000; civetta(); }
+  // lo shishi-odoshi spento: fatto col codice, fra i suoni registrati era un rumore secco e strano
+  // if (t > prossimoBambu) { prossimoBambu = t + 40000 + Math.random() * 30000; bambu(); }
+  // la civetta spenta: tre note pure fatte col codice, sembrava un bambù
+  // if (giorno < .4 && t > prossimaCivetta) { prossimaCivetta = t + 35000 + Math.random() * 40000; civetta(); }
   requestAnimationFrame(frame);
 }
 audio();

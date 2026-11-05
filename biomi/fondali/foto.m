@@ -1,5 +1,5 @@
 // foto <url> <png> [secondi] [larghezza] [altezza]: fotografa una scena nella WKWebView, come la vede il Pomodoro.
-// clang -fobjc-arc -framework Cocoa -framework WebKit scene/fondali/foto.m -o /tmp/foto
+// clang -fobjc-arc -framework Cocoa -framework WebKit biomi/fondali/foto.m -o /tmp/foto
 // La finestra sta fuori dallo schermo tranne due pixel a destra (sennò la pagina è nascosta e non disegna),
 // non prende clic né tastiera. Apre comunque una finestra: per le prove automatiche è meglio Chrome senza schermo (LEGGIMI.md).
 // PRIMA="for (let i = 1; i < 900; i++) frame(i * 16.7); 1" fa girare i fotogrammi a mano: serve a Mac bloccato, quando la pagina è nascosta e non disegna.

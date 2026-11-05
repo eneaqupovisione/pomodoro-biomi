@@ -1,12 +1,14 @@
-// Quello che ogni bioma ha in comune: la query, il sole, il timer, gli inviti,
+// Quello che ogni bioma ha in comune: la query, il sole, il timer, il respiro,
 // la musica e quando l'audio si spegne. Un bioma è una pagina in
-// scene/ con #timer e #invito, che include questo file e poi disegna; i suoi
+// biomi/ con #timer e #invito, che include questo file e poi disegna; i suoi
 // suoni li costruisce in fondo(), chiamata quando parte l'audio.
 //
 // La apre Pomodoro.app con ?fine=<ms epoch>&suono=1|0[&musica=<file in ../musica>]
 // [&lat=…&lon=…] e i fatti della giornata, che possono mancare: uscite=N (pause
-// tolte coi dieci tocchi oggi). Nel browser si può aggiungere &ora=22:30 per forzare
-// l'ora del giorno. Ogni .html di scene/ è un bioma sceglibile nel Pomodoro.
+// tolte coi dieci tocchi oggi). Facoltativi, che l'app di oggi non manda ma un bioma
+// sa usare (lo stagno): esagerato=0..3 (quanto si è esagerato oggi col lavoro),
+// mangiato=1|0, studiato=1|0. Nel browser si può aggiungere &ora=22:30 per forzare
+// l'ora del giorno. Ogni .html di biomi/ è un bioma sceglibile nel Pomodoro.
 // L'app scrive i tocchi per uscire appena sopra la fascia dell'invito: lì
 // niente di importante.
 //
@@ -19,7 +21,7 @@ const FINE = Number(Q.get('fine')) || Date.now() + 300000;
 const SUONO = Q.get('suono') !== '0';
 const ORA = Q.get('ora');
 const numero = k => Q.has(k) && Q.get(k) !== '' && !isNaN(Q.get(k)) ? Number(Q.get(k)) : null;
-const OGGI = { uscite: numero('uscite') };
+const OGGI = { esagerato: numero('esagerato'), mangiato: numero('mangiato'), studiato: numero('studiato'), uscite: numero('uscite') };
 // Dove sta il sole: impostazioni.json, luogo: {lat, lon}; senza, Roma
 const LAT = numero('lat') ?? 41.9, LON = numero('lon') ?? 12.5;
 
@@ -120,22 +122,26 @@ function sfuma(secondi) {
 document.addEventListener('visibilitychange', () => zitto(document.hidden));
 addEventListener('pagehide', spegni);
 
-// ---------- Il timer e gli inviti: vengono dalla ricerca sugli occhi (occhi.md) ----------
-const inviti = ["cerca la cosa più lontana che vedi", "qualche battito di ciglia lento, fino in fondo", "alzati: collo e spalle aspettavano",
-  "se c'è una finestra, guarda il cielo", "il telefono può aspettare: è più vicino agli occhi dello schermo", "un sorso d'acqua, e guarda fuori",
-  "lascia vagare lo sguardo, senza fissare niente", "quando torni: lo schermo è luminoso quanto la stanza?"];
-let ii = 0;
+// ---------- Il timer e il respiro ----------
+// In basso un respiro guidato (al posto degli inviti per gli occhi di occhi.md): inspira 4 s,
+// trattieni 4, espira 6; l'espirazione più lunga è quella che calma. Cambia solo la parola, in
+// dissolvenza: le scritte non si ingrandiscono.
+const RESPIRO = [["inspira", 4], ["trattieni", 4], ["espira", 6]];   // parola, secondi
+let fase = 0;
 const elInvito = document.getElementById('invito'), elTimer = document.getElementById('timer');
-function cambiaInvito() {       // uno su due: chiudi gli occhi, stringi, riapri
+function respira() {
+  const [parola, secondi] = RESPIRO[fase]; fase = (fase + 1) % RESPIRO.length;
+  elInvito.style.transition = 'opacity .5s';
   elInvito.style.opacity = 0;
-  setTimeout(() => { elInvito.textContent = ii % 2 ? inviti[(ii >> 1) % inviti.length] : "chiudi gli occhi, stringi, riapri"; ii++; elInvito.style.opacity = 1; }, 800);
+  setTimeout(() => { elInvito.textContent = parola; elInvito.style.opacity = 1; }, 500);
+  setTimeout(respira, secondi * 1000);
 }
 function orologio() {
   const ms = FINE - Date.now(), resto = Math.max(0, Math.ceil(ms / 1000));
   elTimer.textContent = Math.floor(resto / 60) + ":" + String(resto % 60).padStart(2, '0');
   if (ms < 2500) sfuma(2.5);     // a finestra chiusa deve essere già silenzio
 }
-cambiaInvito(); setInterval(cambiaInvito, 9000);
+respira();
 orologio(); setInterval(orologio, 250);
 
 // ---------- Il fondale: un'immagine di fondali/ ridotta a pixel veri ----------
