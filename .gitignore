@@ -11,10 +11,7 @@ musica/**
 !musica/LEGGIMI.md
 !musica/elenca.sh
 !musica/brani.js
-!musica/*/.gitkeep
-
-# Le registrazioni intere dei suoni: si scaricano dai link di biomi/suoni/LEGGIMI.md
-biomi/suoni/originali/
+!musica/*/LEGGIMI.md
 
 .DS_Store
 __pycache__/

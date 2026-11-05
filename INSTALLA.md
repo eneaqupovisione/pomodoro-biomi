@@ -81,13 +81,18 @@ L'app le rilegge ogni secondo: non serve ricostruire.
 
 ## 5. La musica (facoltativa)
 
-I brani non sono inclusi. Mettili in `musica/<bioma>/`, poi:
+I brani non sono inclusi: la loro licenza non permette di ridistribuirli. Per ogni
+bioma ci sono quelli scelti, coi link alle pagine di Pixabay e il nome del file che
+si scarica: [`musica/stagno/LEGGIMI.md`](musica/stagno/LEGGIMI.md),
+[`giardino`](musica/giardino/LEGGIMI.md), [`pioggia`](musica/pioggia/LEGGIMI.md),
+[`mare`](musica/mare/LEGGIMI.md). Scaricali dal browser, spostali in
+`musica/<bioma>/`, poi:
 
 ```bash
 musica/elenca.sh
 ```
 
-Dettagli e brani consigliati: [`musica/LEGGIMI.md`](musica/LEGGIMI.md).
+Dettagli (volume, velocità, brani tuoi): [`musica/LEGGIMI.md`](musica/LEGGIMI.md).
 
 ## 6. La seconda sicura per Claude Code (facoltativa)
 

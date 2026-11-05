@@ -35,14 +35,15 @@ l'uso personale: [Pixabay Music](https://pixabay.com/music/),
 [Free Music Archive](https://freemusicarchive.org),
 [Incompetech](https://incompetech.com).
 
-Un punto di partenza, bioma per bioma (titoli su Pixabay Music, da cercare per nome):
+**I brani scelti per ogni bioma**, coi link alle pagine di Pixabay, il nome del file
+che scarichi e come metterlo, stanno nella cartella del bioma:
 
-| bioma | l'aria | brani |
+| bioma | l'aria | |
 |---|---|---|
-| stagno | calmo, liquido, lento: koto, kalimba | *In the place far away* (harumachimusic), *Bamboo Forest 285Hz* (Dominique Garnier), *Japanese Aikoto Instrumental 7* (koto-japan-soundtrack) |
-| giardino | raccolto, sacro, un po' misterioso: shakuhachi, tempio | *Zen Temple*, *First Light Temple* (Djovan) |
-| pioggia | malinconia urbana, notturno: piano jazz, Rhodes | *New York Jazz Midnight* (MarkMusicStudio), *Slow Music - Slow* (AndriiH) |
-| mare | ampio, arioso: piano, chitarra con molto riverbero | *Slow* (Luceris), *Minimal Piano* (AtlasAudio) |
+| stagno | calmo, liquido, lento: koto, kalimba | [`stagno/LEGGIMI.md`](stagno/LEGGIMI.md) |
+| giardino | raccolto, sacro, un po' misterioso: shakuhachi, tempio | [`giardino/LEGGIMI.md`](giardino/LEGGIMI.md) |
+| pioggia | malinconia urbana, notturno: piano jazz, Rhodes | [`pioggia/LEGGIMI.md`](pioggia/LEGGIMI.md) |
+| mare | ampio, arioso: piano, chitarra con molto riverbero | [`mare/LEGGIMI.md`](mare/LEGGIMI.md) |
 
 Pixabay non si scarica da riga di comando: si scarica dal browser, poi si sposta
 il file nella cartella del bioma.

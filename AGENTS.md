@@ -131,7 +131,8 @@ L'app apre `biomi/<bioma>.html?fine=<ms epoch>&suono=1|0&uscite=N[&lat=…&lon=�
 4. **I suoni**: in `fondo = () => {…}`, che `pausa.js` chiama quando parte l'audio.
    Fatti col codice (`rumore`, oscillatori) o registrati: le registrazioni vanno in
    `biomi/suoni/<nome>.js` come `SUONI = { nome: 'data:audio/mp4;base64,…' }`,
-   tagliate da `biomi/suoni/impacchetta.sh` (aggiungi lì i tuoi tagli e un
+   tagliate da `biomi/suoni/impacchetta.sh` dalle registrazioni intere in
+   `biomi/suoni/originali/<nome>/` (aggiungi lì i tuoi tagli e un
    `pacchetto <nome> …`). Poi `suono('nome')` le decodifica, `ciclo(buf)` le fa girare
    in loop senza cucitura, `colpo(buf, inizio, durata, volume, pan)` ne suona un pezzo.
    Due regole imparate: un sottofondo registrato va preso forte e abbassato, mai preso
@@ -149,11 +150,12 @@ segnate in [`occhi.md`](occhi.md) come «provato» o «consenso».
 
 ## Licenze: cosa può entrare nel repository
 
-- **Suoni**: solo CC0 (o licenze che permettono la ridistribuzione, con l'autore in
-  `biomi/suoni/LEGGIMI.md`). Controlla la licenza sulla pagina del suono, non fidarti
-  del titolo.
+- **Suoni**: solo CC0. La registrazione intera va in `biomi/suoni/originali/<bioma>/`
+  (o `comuni/` se la usano più biomi), con una riga in `biomi/suoni/LEGGIMI.md` (file,
+  pagina di Freesound, dove si usa). Controlla la licenza sulla pagina del suono, non
+  fidarti del titolo.
 - **Musica**: mai nel repository. `musica/**` è in `.gitignore`, tranne `brani.js`,
-  `elenca.sh`, `LEGGIMI.md` e i `.gitkeep`. Se aggiungi brani a `brani.js` per una
+  `elenca.sh` e i `LEGGIMI.md` (quello generale e quelli dei biomi, coi link ai brani). Se aggiungi brani a `brani.js` per una
   persona, ricordale che quel file elenca file che il repository non ha.
 - **Immagini di riferimento** per i fondali: solo se chi le ha fatte ne permette
   l'uso.
@@ -163,7 +165,8 @@ segnate in [`occhi.md`](occhi.md) come «provato» o «consenso».
 ## Cosa non fare
 
 - Non mettere nel repository `impostazioni.json`, `dati/`, `app/Pomodoro.app`, i
-  brani, le registrazioni intere di `biomi/suoni/originali/`.
+  brani. Le registrazioni intere dei suoni sì, in `biomi/suoni/originali/<bioma>/`,
+  ma solo CC0.
 - Non mettere pagine in `biomi/` che non siano biomi (gli strumenti stanno in `biomi/fondali/`).
 - Non togliere il minuto d'avviso, i dieci tocchi o il ritorno a zero dopo 5 minuti
   lontano: sono il patto fra il Pomodoro e chi lo usa.

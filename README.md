@@ -1,5 +1,15 @@
 # Pomodoro 🍅
 
+| | di giorno | di notte |
+|---|---|---|
+| **stagno** | ![lo stagno di giorno](vetrina/stagno-giorno.png) | ![lo stagno di notte](vetrina/stagno-notte.png) |
+| **giardino** | ![il giardino di giorno](vetrina/giardino-giorno.png) | ![il giardino di notte](vetrina/giardino-notte.png) |
+| **pioggia** | ![la pioggia di giorno](vetrina/pioggia-giorno.png) | ![la pioggia di notte](vetrina/pioggia-notte.png) |
+| **mare** | ![il mare di giorno](vetrina/mare-giorno.png) | ![il mare di notte](vetrina/mare-notte.png) |
+
+![il giardino al tramonto, col tanuki che attraversa la ghiaia](vetrina/giardino-tramonto.png)
+*Il giardino al tramonto: il tanuki attraversa la ghiaia. In basso, il respiro guidato.*
+
 > **In English, briefly.** A pomodoro timer for macOS with pixel-art *biomes*.
 > After 45 minutes of work, a biome (a koi pond, a zen garden, rain on a window,
 > the sea at dusk) covers your screen for 5 minutes and takes the keyboard, so you
@@ -37,8 +47,9 @@ luce blu e modalità scura sono miti): [`occhi.md`](occhi.md), con le fonti.
 **Il giorno e la notte sono veri**: l'altezza del sole sul tuo luogo
 (`impostazioni.json`, `luogo`), calcolata senza rete. I suoni sono registrazioni
 CC0 da Freesound più qualche suono fatto dal codice; i fondali sono fatti con un
-generatore d'immagini, e sopra il codice anima tutto il resto. La musica la
-aggiungi tu ([`musica/LEGGIMI.md`](musica/LEGGIMI.md)).
+generatore d'immagini, e sopra il codice anima tutto il resto. La musica non è
+inclusa (la sua licenza non lo permette): per ogni bioma ci sono i brani scelti, coi
+link per scaricarli e le istruzioni, in `musica/<bioma>/LEGGIMI.md`.
 
 ## Tre modi di usarlo
 
@@ -114,9 +125,10 @@ L'app non chiede permessi: legge solo dove stanno le finestre, non cosa c'è den
 | `biomi/*.html` | i biomi: ogni `.html` qui dentro è un bioma sceglibile |
 | `biomi/pausa.js` | quello che i biomi hanno in comune: il sole, il timer, il respiro, l'audio, la musica |
 | `biomi/fondali/` | i fondali e gli strumenti per provarli ([`LEGGIMI.md`](biomi/fondali/LEGGIMI.md)) |
-| `biomi/suoni/` | i suoni registrati, tagliati e impacchettati ([`LEGGIMI.md`](biomi/suoni/LEGGIMI.md), con le fonti) |
+| `biomi/suoni/` | i suoni registrati: interi in `originali/<bioma>/`, tagliati e impacchettati in `<bioma>.js` ([`LEGGIMI.md`](biomi/suoni/LEGGIMI.md), con le fonti) |
 | `modello/bioma.html` | un bioma minimo, da copiare per farne uno tuo |
-| `musica/` | i brani, che aggiungi tu ([`LEGGIMI.md`](musica/LEGGIMI.md)) |
+| `vetrina/` | le foto dei biomi, qui sopra |
+| `musica/` | i brani, che aggiungi tu: in ogni `musica/<bioma>/LEGGIMI.md` i brani scelti, coi link per scaricarli ([`LEGGIMI.md`](musica/LEGGIMI.md)) |
 | `costruisci.command` | costruisce `app/Pomodoro.app` |
 | `installa.sh` | costruisce e fa partire il Pomodoro a ogni accesso |
 | `hook.py` | la seconda sicura, per Claude Code |
@@ -129,8 +141,9 @@ Per chi ci lavora (persone e agenti): [`AGENTS.md`](AGENTS.md).
 ## Licenze
 
 - **Il codice**: MIT, in [`LICENSE`](LICENSE).
-- **I suoni** in `biomi/suoni/*.js`: tratti di registrazioni **CC0** di
-  [Freesound](https://freesound.org), elencate con gli autori in
+- **I suoni**: registrazioni **CC0** di [Freesound](https://freesound.org), intere
+  in `biomi/suoni/originali/<bioma>/` e tagliate in `biomi/suoni/*.js`, elencate con
+  gli autori in
   [`biomi/suoni/LEGGIMI.md`](biomi/suoni/LEGGIMI.md).
 - **I fondali** in `biomi/fondali/`: generati con Gemini; per quanto possano avere
   una licenza, sono offerti come CC0.
